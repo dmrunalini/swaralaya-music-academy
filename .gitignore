@@ -1,0 +1,59 @@
+# Node / Angular
+node_modules/
+dist/
+out-tsc/
+.angular/
+build/
+tmp/
+coverage/
+
+# VS Code / editor
+.vscode/
+.history/
+.idea/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+*.log
+
+# Lock files (optional - commit if you want deterministic installs)
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Environment / secrets
+.env
+.env.*
+src/environments/environment.local.ts
+src/environments/*.local.ts
+src/environments/*.secret.ts
+firebase-debug.log
+.firebase/
+.serviceAccountKey*.json
+google-services.json
+
+# Firebase functions
+functions/node_modules/
+functions/.runtimeconfig.json
+
+# OS files
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# Editor / IDE files
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+*.swp
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Misc
+.cache/
+dist-*
