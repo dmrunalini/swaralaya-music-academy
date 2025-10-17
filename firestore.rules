@@ -1,0 +1,51 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
+    function isTeacher() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isTeacher();
+      allow create: if isOwner(userId);
+      allow update, delete: if isOwner(userId);
+    }
+
+    match /students/{studentId} {
+      allow create: if isSignedIn() && request.resource.data.parentUid == request.auth.uid;
+      allow read, update, delete: if isSignedIn() && resource.data.parentUid == request.auth.uid;
+      allow read: if isTeacher();
+    }
+
+    match /studentRequests/{requestId} {
+      allow create: if isSignedIn() && request.resource.data.parentUid == request.auth.uid;
+      allow read: if isSignedIn() && (resource.data.parentUid == request.auth.uid || isTeacher());
+    }
+
+    match /studentFees/{feeId} {
+      // Parent create/update own fee record
+      allow create, update: if isSignedIn() && request.resource.data.parentUid == request.auth.uid;
+
+      // Parent read/delete own, teachers can read
+      allow read, delete: if isSignedIn() && resource.data.parentUid == request.auth.uid;
+      allow read: if isTeacher();
+
+      // Teachers can update only moderation fields on existing docs
+      allow update: if isTeacher()
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(
+          ['teacherStatus','teacherId','teacherEmail','teacherUpdatedAt','locked']
+        )
+        && request.resource.data.parentUid == resource.data.parentUid
+        && request.resource.data.studentId == resource.data.studentId
+        && request.resource.data.monthKey == resource.data.monthKey
+        && request.resource.data.teacherId == request.auth.uid;
+    }
+
+    match /{document=**} { allow read, write: if false; }
+  }
+}

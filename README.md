@@ -1,6 +1,6 @@
-# Swaralya Music Academy
+# Swaralaya Music Academy
 
-Welcome to the Swaralya Music Academy project! This Angular application is designed to manage music courses, students, and schedules effectively.
+Welcome to the Swaralaya Music Academy project! This Angular application is designed to manage music courses, students, and schedules effectively.
 
 ## Features
 
@@ -12,7 +12,7 @@ Welcome to the Swaralya Music Academy project! This Angular application is desig
 ## Project Structure
 
 ```
-swaralya-music-academy
+swaralaya-music-academy
 ├── src
 │   ├── app
 │   │   ├── core
@@ -56,7 +56,7 @@ swaralya-music-academy
 1. **Clone the repository**:
    ```
    git clone <repository-url>
-   cd swaralya-music-academy
+   cd swaralaya-music-academy
    ```
 
 2. **Install dependencies**:

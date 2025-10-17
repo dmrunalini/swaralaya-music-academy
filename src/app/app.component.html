@@ -1,17 +1,13 @@
-<div class="header">
-  <h1>Welcome to Swaralya Music Academy</h1>
+<div class="layout">
+  <app-header></app-header>
+
+  <div class="content">
+    <main class="app-content">
+      <router-outlet></router-outlet>
+    </main>
+
+    <footer class="footer">
+      <p>&copy; 2023 Swaralaya Music Academy. All rights reserved.</p>
+    </footer>
+  </div>
 </div>
-
-<nav>
-  <ul>
-    <li><a routerLink="/courses">Courses</a></li>
-    <li><a routerLink="/students">Students</a></li>
-    <li><a routerLink="/schedule">Schedule</a></li>
-  </ul>
-</nav>
-
-<router-outlet></router-outlet>
-
-<footer>
-  <p>&copy; 2023 Swaralya Music Academy. All rights reserved.</p>
-</footer>

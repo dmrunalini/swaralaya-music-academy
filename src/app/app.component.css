@@ -26,12 +26,22 @@ h1 {
     color: #35424a;
 }
 
+.layout {
+  display: flex;
+  min-height: 100vh;
+}
+.content {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.app-content {
+  flex: 1 1 auto;
+  padding: 16px;
+  background: #f8fafc; /* slate-50 */
+}
 .footer {
-    text-align: center;
-    padding: 10px 0;
-    background: #35424a;
-    color: #ffffff;
-    position: relative;
-    bottom: 0;
-    width: 100%;
+  padding: 12px 16px;
+  background: #e2e8f0; /* slate-200 */
 }

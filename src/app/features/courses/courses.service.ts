@@ -1,13 +1,20 @@
 import { Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
-import { Course } from '../../shared/models';
+
+// Local Course interface because '../../shared/models' does not export 'Course'
+interface Course {
+  id: number;
+  title: string;
+  description?: string;
+  // extend with other fields from your backend model as needed
+}
 
 @Injectable({
   providedIn: 'root'
 })
 export class CoursesService {
-  private apiUrl = 'https://api.swaralyamusicacademy.com/courses'; // Replace with your actual API URL
+  private apiUrl = 'https://api.swaralayamusicacademy.com/courses'; // Replace with your actual API URL
 
   constructor(private http: HttpClient) { }
 
