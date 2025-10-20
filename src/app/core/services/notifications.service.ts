@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { getFirestore, collection, addDoc, query, where, onSnapshot, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { getFirestore, collection, addDoc, updateDoc, doc, query, where, onSnapshot, serverTimestamp } from 'firebase/firestore';
 import { Observable } from 'rxjs';
 
 @Injectable({ providedIn: 'root' })
@@ -31,6 +31,23 @@ export class NotificationsService {
           return tb - ta;
         });
         sub.next(items.slice(0, limitTo));
+      }, err => sub.error(err));
+      return () => stop();
+    });
+  }
+
+  // List all contact messages (sorted client-side by createdAt desc)
+  listContactAll(): Observable<any[]> {
+    return new Observable(sub => {
+      const qRef = query(collection(this.db, 'notifications'), where('type', '==', 'contact'));
+      const stop = onSnapshot(qRef, snap => {
+        const items = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+        items.sort((a, b) => {
+          const ta = a.createdAt?.toMillis ? a.createdAt.toMillis() : (a.createdAt || 0);
+          const tb = b.createdAt?.toMillis ? b.createdAt.toMillis() : (b.createdAt || 0);
+          return tb - ta;
+        });
+        sub.next(items);
       }, err => sub.error(err));
       return () => stop();
     });
