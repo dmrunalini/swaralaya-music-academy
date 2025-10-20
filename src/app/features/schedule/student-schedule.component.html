@@ -1,0 +1,43 @@
+<div class="wrap">
+  <h2>My Classes</h2>
+
+  <section class="card">
+    <div *ngIf="classes.length === 0" class="muted">No classes.</div>
+    <div *ngFor="let c of classes" class="row">
+      <div class="col">
+        <div class="t">{{ c.title }}</div>
+        <div class="m muted">{{ fmt(c.startUtc) }} – {{ fmt(c.endUtc) }}</div>
+        <div class="m" *ngIf="c.location as loc">
+          <a *ngIf="loc.type === 'link'" [routerLink]="loc.value">Join video</a>
+        </div>
+        <div class="m" *ngIf="c.status === 'cancelled'">Status: cancelled</div>
+      </div>
+      <div class="actions">
+        <button (click)="openReschedule(c)" [disabled]="c.status==='cancelled'">Request reschedule</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Reschedule modal -->
+  <div class="modal" *ngIf="selected">
+    <div class="backdrop" (click)="close()"></div>
+    <div class="dialog">
+      <div class="head">
+        <h4>Request reschedule</h4>
+        <button class="icon" (click)="close()">✕</button>
+      </div>
+      <div class="pad">
+        <div class="muted">Class: {{ selected.title }}</div>
+        <textarea [(ngModel)]="reason" rows="3" placeholder="Reason (optional)"></textarea>
+        <label class="muted">Proposed times (your local time)</label>
+        <input [(ngModel)]="proposed1" type="datetime-local" />
+        <input [(ngModel)]="proposed2" type="datetime-local" />
+        <input [(ngModel)]="proposed3" type="datetime-local" />
+      </div>
+      <div class="foot">
+        <button class="btn" (click)="sendRequest()" [disabled]="busy">Send</button>
+        <button class="btn ghost" (click)="close()">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>

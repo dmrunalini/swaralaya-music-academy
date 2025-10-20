@@ -1,1 +1,10 @@
+.wrap { padding: 12px; }
+.card { background:#fff; padding:12px; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.06); margin:12px 0; }
+.grid { display:grid; gap:8px; grid-template-columns: 1fr 1fr; }
+.grid textarea { grid-column: 1 / -1; }
+.row { display:flex; justify-content:space-between; gap:8px; border-top:1px solid #eee; padding:10px 0 }
+.row:first-child { border-top:0 }
+.muted { color:#64748b; font-size:12px }
+.t { font-weight:600 }
+.actions button { padding:6px 10px; border-radius:8px; border:1px solid #cbd5e1; background:#fff; cursor:pointer }
 .teacher-schedule { padding: 1rem; }

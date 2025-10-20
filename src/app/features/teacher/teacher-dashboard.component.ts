@@ -1,18 +1,18 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule } from '@angular/router';
-import { TeacherNotificationsComponent } from './teacher-notifications.component';
 
 @Component({
   selector: 'app-teacher-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, TeacherNotificationsComponent],
+  imports: [CommonModule],
   template: `
-    <h2>Teacher Dashboard</h2>
-
-    <app-teacher-notifications></app-teacher-notifications>
-
-    <router-outlet></router-outlet>
-  `
+    <div class="content">
+      <h2>Teacher Dashboard</h2>
+      <!-- dashboard content -->
+    </div>
+  `,
+  styles: [`
+    .content{background:#fff;padding:12px;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.06)}
+  `]
 })
 export class TeacherDashboardComponent {}

@@ -46,7 +46,7 @@ import { NotificationsService } from '../../core/services/notifications.service'
           <label class="muted">Reply</label>
           <textarea [(ngModel)]="replyText" rows="4" placeholder="Type your reply..."></textarea>
           <div class="actions">
-            <button class="btn" (click)="sendReply()" [disabled]="!selected?.email || !replyText?.trim()">Send email</button>
+            <button class="btn" (click)="sendReply()" [disabled]="!selected.email || !replyText.trim()">Send email</button>
             <button class="btn" (click)="markRead(selected)" [disabled]="selected?.status === 'read'">Mark read</button>
             <button class="btn ghost" (click)="close()">Close</button>
           </div>

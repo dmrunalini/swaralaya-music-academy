@@ -21,6 +21,7 @@ import { AuthService } from '../../core/services/auth.service';
             <a routerLink="/teacher/materials" routerLinkActive="active">Materials</a>
             <a routerLink="/teacher/students" routerLinkActive="active">Students</a>
             <a routerLink="/teacher/calendar" routerLinkActive="active">Calendar</a>
+            <a *ngIf="isTeacher" routerLink="/teacher/notifications" routerLinkActive="active">Notifications</a>
             <a routerLink="/contact" routerLinkActive="active">Contact Us</a>
           </ng-container>
           <ng-template #studentMenu>
@@ -94,8 +95,11 @@ import { AuthService } from '../../core/services/auth.service';
   `]
 })
 export class HeaderComponent {
+  isTeacher = false;
   user$ = this.auth.user$;
-  constructor(private auth: AuthService, private router: Router) {}
+  constructor(private auth: AuthService, private router: Router) {
+    this.auth.user$.subscribe(u => this.isTeacher = u?.role === 'teacher');
+  }
   async logout() {
     await this.auth.signOut();
     await this.router.navigateByUrl('/');

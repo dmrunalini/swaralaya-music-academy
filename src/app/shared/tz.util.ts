@@ -1,4 +1,4 @@
-import { zonedTimeToUtc, utcToZonedTime, formatInTimeZone } from 'date-fns-tz';
+import { fromZonedTime, toZonedTime, formatInTimeZone } from 'date-fns-tz';
 
 const TZ_ABBR_TO_IANA: Record<string, string> = {
   // Americas
@@ -47,12 +47,13 @@ export function abbrToIana(abbr: string | undefined): string {
 // Convert a local datetime (e.g., '2025-10-18T15:00') in teacher’s TZ to UTC ISO
 export function localToUtcIso(localIso: string, tzAbbr: string): string {
   const iana = abbrToIana(tzAbbr);
-  return zonedTimeToUtc(localIso, iana).toISOString();
+  const utc = fromZonedTime(localIso, iana);
+  return utc.toISOString();
 }
 
 // Convert UTC ISO to a Date in viewer’s TZ; format for display
 export function utcIsoToLocalLabel(utcIso: string, tzAbbr: string, fmt = 'yyyy-MM-dd HH:mm zzz'): string {
   const iana = abbrToIana(tzAbbr);
-  const d = utcToZonedTime(utcIso, iana);
+  const d = toZonedTime(utcIso, iana);
   return formatInTimeZone(d, iana, fmt);
 }
