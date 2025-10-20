@@ -1,0 +1,65 @@
+.materials-menu {
+    padding: 1rem;
+
+    .materials-top {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .categories {
+        width: 200px;
+        border-right: 1px solid #eee;
+        padding-right: 1rem;
+    }
+
+    .categories ul {
+        list-style: none;
+        padding: 0;
+    }
+
+    .categories li {
+        padding: 6px 4px;
+        cursor: pointer;
+    }
+
+    .categories li.active {
+        background: #f0f7ff;
+        font-weight: 600;
+    }
+
+    .materials-list {
+        flex: 1;
+        padding-left: 1rem;
+    }
+
+    .create-material input, .create-material textarea { width: 100%; margin-bottom: 0.5rem; }
+
+    .material-item { padding: 0.6rem; border-bottom: 1px solid #eee; }
+    .material-item .title { font-weight: 700; }
+    .material-item .meta { color: #777; font-size: 0.9rem; }
+
+    .materials-table { width: 100%; border-collapse: collapse; }
+    .materials-table th, .materials-table td { padding: 8px 10px; border-bottom: 1px solid #eee; text-align: left; }
+    .materials-table thead th { background: #fafafa; font-weight: 700; }
+    .materials-table tbody tr:hover { background: #fbfbfb; }
+    .materials-table .open-link { margin-left: 8px; }
+
+    /* Modal */
+    .materials-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; }
+    .materials-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.4); }
+    .materials-modal-content { position: relative; background: #fff; padding: 1rem; width: 80%; max-width: 900px; max-height: 90%; overflow: auto; border-radius: 6px; box-shadow: 0 8px 30px rgba(0,0,0,0.2); }
+    .materials-modal-header { display:flex; justify-content:space-between; align-items:center; }
+    .materials-modal-body { margin-top: 0.5rem; }
+
+    /* create signs and popup */
+    .create-signs { display:flex; gap:8px; margin-top:8px; }
+    .icon-sign { background:#ffffff; border:1px solid #ddd; padding:6px 8px; border-radius:4px; cursor:pointer; }
+    .icon-sign:hover { background:#f7f9fc; }
+
+    .create-popup { position: absolute; left:220px; top:80px; background:#fff; border:1px solid #ddd; padding:10px; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index:100; width:320px; }
+    .create-popup .popup-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px }
+    .create-popup .popup-body input, .create-popup .popup-body textarea { width:100%; margin-bottom:6px }
+    .create-popup .popup-actions { display:flex; gap:8px; justify-content:flex-end }
+    .create-popup .close-x { background:none; border: none; cursor:pointer }
+}
+/* empty placeholder */

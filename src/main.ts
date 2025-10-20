@@ -1,5 +1,5 @@
 import { bootstrapApplication } from '@angular/platform-browser';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Routes } from '@angular/router';
 import { importProvidersFrom } from '@angular/core';
 import { HttpClientModule } from '@angular/common/http';
 
@@ -10,13 +10,14 @@ import { LoginComponent } from './app/features/auth/login.component';
 import { ProfileComponent } from './app/features/profile/profile.component';
 import { TeacherDashboardComponent } from './app/features/teacher/teacher-dashboard.component';
 import { StudentDashboardComponent } from './app/features/student/student-dashboard.component';
-import { AboutComponent } from './app/features/about/about.component';
+import { ContactComponent } from './app/features/contact/contact.component';
 import { CoursesComponent } from './app/features/courses/courses.component';
 import { StudentsComponent } from './app/features/students/students.component';
 import { ScheduleComponent } from './app/features/schedule/schedule.component';
 import { TeacherStudentsComponent } from './app/features/teacher/teacher-students.component';
+import { MaterialsMenuComponent } from './app/features/materials/materials-menu.component';
 
-const routes = [
+const routes: Routes = [
   { path: '', component: HomePublicComponent },
   { path: 'signup', component: SignupComponent },
   { path: 'login', component: LoginComponent },
@@ -29,7 +30,11 @@ const routes = [
   { path: 'courses', component: CoursesComponent },
   { path: 'students', component: StudentsComponent },
   { path: 'schedule', component: ScheduleComponent },
-  { path: 'about', component: AboutComponent },
+  { path: 'contact', component: ContactComponent },
+  { path: 'about', redirectTo: 'contact', pathMatch: 'full' }, // keep old path working (optional)
+  { path: 'materials', component: MaterialsMenuComponent },
+  { path: 'teacher/materials', component: MaterialsMenuComponent },
+  { path: 'student/materials', component: MaterialsMenuComponent },
   { path: '**', redirectTo: '' }
 ];
 

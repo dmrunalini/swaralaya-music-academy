@@ -19,3 +19,5 @@ export interface Material {
     type: 'video' | 'document' | 'audio';
     url: string;
 }
+
+export * from './student.model';

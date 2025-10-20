@@ -1,13 +1,14 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     function isSignedIn() { return request.auth != null; }
     function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
     function isTeacher() {
-      return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher';
+      return isSignedIn() && (
+        request.auth.token.role == 'teacher' ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher')
+      );
     }
 
     match /users/{userId} {
@@ -44,6 +45,24 @@ service cloud.firestore {
         && request.resource.data.studentId == resource.data.studentId
         && request.resource.data.monthKey == resource.data.monthKey
         && request.resource.data.teacherId == request.auth.uid;
+    }
+
+    match /materialsCategories/{id} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isTeacher();
+    }
+
+    match /materials/{id} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isTeacher();
+    }
+
+    // Contact notifications
+    match /notifications/{id} {
+      // Anyone can submit the contact form
+      allow create: if request.resource.data.type == 'contact';
+      // Only teachers can read/update/delete
+      allow read, update, delete: if isTeacher();
     }
 
     match /{document=**} { allow read, write: if false; }

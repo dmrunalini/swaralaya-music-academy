@@ -36,10 +36,7 @@ import { AuthService, AppUser, ChildStudent } from '../../core/services/auth.ser
           <label>
             Time zone
             <select formControlName="timezone">
-              <option value="UTC">UTC</option>
-              <option value="Asia/Kolkata">Asia/Kolkata</option>
-              <option value="Europe/London">Europe/London</option>
-              <option value="America/New_York">America/New_York</option>
+              <option *ngFor="let tz of timezones" [value]="tz">{{ tz }}</option>
             </select>
           </label>
           <label>
@@ -54,7 +51,7 @@ import { AuthService, AppUser, ChildStudent } from '../../core/services/auth.ser
       </div>
 
       <!-- Children (multiple students under this login) -->
-      <div class="card">
+      <div class="card" *ngIf="!isTeacher">
         <h3 class="section-title">Students linked to this account</h3>
 
         <form class="form" [formGroup]="childForm" (ngSubmit)="addChild()">
@@ -169,7 +166,24 @@ export class ProfileComponent implements OnInit {
     assignedTeacherEmail: ['']
   });
 
+  readonly timezones: string[] = [
+    'UTC','GMT',
+    'EST','EDT','CST','CDT','MST','MDT','PST','PDT',
+    'AKST','AKDT','HST','HDT',
+    'AST','ADT','NST','NDT',
+    'IST','BST','WET','WEST','CET','CEST','EET','EEST','MSK',
+    'TRT','IRST','IRDT','GET','GST','PKT','AFT','NPT','MMT','ICT',
+    'WIB','WITA','WIT','HKT','SGT','MYT','PHT','TLT','JST','KST',
+    'AWST','ACST','ACDT','AEST','AEDT','CHAST','CHADT','NZST','NZDT',
+    'ART','UYT','PYT','PET','ECT','COT','BOT','GFT','AMT','BRT','BRST',
+    'CLT','CLST','VET','WAT','WAST','CAT','SAST','EAT'
+  ];
+
   constructor(private auth: AuthService, private fb: FormBuilder) {}
+
+  get isTeacher(): boolean {
+    return this.user?.role === 'teacher';
+  }
 
   ngOnInit(): void {
     this.auth.user$.subscribe(async u => {
@@ -179,7 +193,11 @@ export class ProfileComponent implements OnInit {
           timezone: u.timezone ?? 'UTC',
           phone: u.phone ?? ''
         });
-        await this.loadChildren();
+        if (!this.isTeacher) {
+          await this.loadChildren();
+        } else {
+          this.children = [];
+        }
       } else {
         this.children = [];
       }

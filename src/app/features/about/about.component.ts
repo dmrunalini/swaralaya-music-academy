@@ -5,6 +5,6 @@ import { CommonModule } from '@angular/common';
   selector: 'app-about',
   standalone: true,
   imports: [CommonModule],
-  template: `<h2>About Swaralaya Music Academy</h2><p>Info...</p>`
+  template: `<h2>Contact Us</h2><p>Reach out to us.</p>`
 })
 export class AboutComponent {}

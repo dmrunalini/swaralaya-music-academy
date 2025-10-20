@@ -21,13 +21,13 @@ import { AuthService } from '../../core/services/auth.service';
             <a routerLink="/teacher/materials" routerLinkActive="active">Materials</a>
             <a routerLink="/teacher/students" routerLinkActive="active">Students</a>
             <a routerLink="/teacher/calendar" routerLinkActive="active">Calendar</a>
-            <a routerLink="/about" routerLinkActive="active">About</a>
+            <a routerLink="/contact" routerLinkActive="active">Contact Us</a>
           </ng-container>
           <ng-template #studentMenu>
             <a routerLink="/student" routerLinkActive="active">Dashboard</a>
             <a routerLink="/student/profile" routerLinkActive="active">Profile</a>
             <a routerLink="/student/materials" routerLinkActive="active">Materials</a>
-            <a routerLink="/about" routerLinkActive="active">About</a>
+            <a routerLink="/contact" routerLinkActive="active">Contact Us</a>
           </ng-template>
 
           <button class="logout" (click)="logout()">Logout</button>
@@ -36,7 +36,7 @@ import { AuthService } from '../../core/services/auth.service';
         <ng-template #anon>
           <a routerLink="/login" routerLinkActive="active">Sign in</a>
           <a routerLink="/signup" routerLinkActive="active">Sign up</a>
-          <a routerLink="/about" routerLinkActive="active">About</a>
+          <a routerLink="/contact" routerLinkActive="active">Contact Us</a>
         </ng-template>
       </nav>
     </aside>
