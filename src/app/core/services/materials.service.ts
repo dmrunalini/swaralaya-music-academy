@@ -1,10 +1,43 @@
 import { Injectable } from '@angular/core';
-import { Firestore, getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, onSnapshot } from 'firebase/firestore';
+import {
+  getFirestore,
+  collection,
+  query,
+  where,
+  onSnapshot,
+  addDoc,
+  setDoc,
+  doc,
+  serverTimestamp,
+  orderBy,
+  updateDoc,
+  deleteDoc
+} from 'firebase/firestore';
 import { Observable } from 'rxjs';
+
+function swallowPermissionDenied<T>(p: Promise<T>): Promise<T | void> {
+  return p.catch((e: any) => {
+    if (e?.code === 'permission-denied') return;
+    throw e;
+  });
+}
 
 @Injectable({ providedIn: 'root' })
 export class MaterialsService {
-  private db: Firestore = getFirestore();
+  private db = getFirestore();
+
+  // Example: track a view under users/{uid}/recentMaterials/{mid}
+  async trackView(userUid: string, materialId: string, payload?: any) {
+    const ref = doc(this.db, `users/${userUid}/recentMaterials/${materialId}`);
+    await swallowPermissionDenied(setDoc(ref, {
+      materialId,
+      lastViewedAt: serverTimestamp(),
+      ...(payload || {})
+    }, { merge: true }));
+  }
+
+  // Call trackView from your component/service after a material is opened
+  // and DO NOT await it in critical path, or swallow errors as above.
 
   // Categories are stored in 'materialsCategories' as { name, ownerUid, createdAt }
   getCategories(): Observable<string[]> {

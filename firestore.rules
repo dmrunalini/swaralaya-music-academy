@@ -2,97 +2,109 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
-    function isOwner(uid) { return isSignedIn() && request.auth.uid == uid; }
-    function isTeacher() {
-      return isSignedIn() && (
-        request.auth.token.role == 'teacher' ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher')
-      );
+    function userDoc(uid) { return get(/databases/$(database)/documents/users/$(uid)); }
+    function hasRole(role) {
+      return request.auth.token.role == role || userDoc(request.auth.uid).data.role == role;
+    }
+    function isTeacher() { return isSignedIn() && hasRole('teacher'); }
+    function isStudent() { return isSignedIn() && hasRole('student'); }
+    function isParent()  { return isSignedIn() && hasRole('parent'); }
+    function isSchoolUser() { return isTeacher() || isStudent() || isParent(); }
+
+    // Users
+    match /users/{uid} {
+      allow read: if isTeacher() || (isSignedIn() && request.auth.uid == uid);
+      allow write: if false;
     }
 
-    match /users/{userId} {
-      allow read: if isOwner(userId) || isTeacher();
-      allow create: if isOwner(userId);
-      allow update, delete: if isOwner(userId);
+    // Allow a signed-in user to read/write their own subcollections (e.g., recentMaterials, activity)
+    match /users/{uid}/{document=**} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
-    match /students/{studentId} {
-      allow create: if isSignedIn() && request.resource.data.parentUid == request.auth.uid;
-      allow read, update, delete: if isSignedIn() && resource.data.parentUid == request.auth.uid;
-      allow read: if isTeacher();
+    // Parent-owned children list (teachers can read; parents read their own)
+    match /users/{parentUid}/students/{sid} {
+      allow read: if isTeacher() || (isSignedIn() && request.auth.uid == parentUid);
+      allow write: if false;
     }
 
-    match /studentRequests/{requestId} {
-      allow create: if isSignedIn() && request.resource.data.parentUid == request.auth.uid;
-      allow read: if isSignedIn() && (resource.data.parentUid == request.auth.uid || isTeacher());
+    // Teachers can read student profiles from any 'students' subcollection; parents can read their own if parentUid on doc
+    match /{path=**}/students/{sid} {
+      allow read: if isTeacher() || (isSignedIn() && resource.data.parentUid == request.auth.uid);
+      allow write: if false;
     }
 
-    match /studentFees/{feeId} {
-      // Parent create/update own fee record
-      allow create, update: if isSignedIn() && request.resource.data.parentUid == request.auth.uid;
-
-      // Parent read/delete own, teachers can read
-      allow read, delete: if isSignedIn() && resource.data.parentUid == request.auth.uid;
-      allow read: if isTeacher();
-
-      // Teachers can update only moderation fields on existing docs
-      allow update: if isTeacher()
-        && request.resource.data.diff(resource.data).changedKeys().hasOnly(
-          ['teacherStatus','teacherId','teacherEmail','teacherUpdatedAt','locked']
-        )
-        && request.resource.data.parentUid == resource.data.parentUid
-        && request.resource.data.studentId == resource.data.studentId
-        && request.resource.data.monthKey == resource.data.monthKey
-        && request.resource.data.teacherId == request.auth.uid;
+    // Categories (teachers create/update; all school users read)
+    match /categories/{id} {
+      allow read: if isSchoolUser();
+      allow create, update: if isTeacher();
+      allow delete: if false;
     }
 
-    match /materialsCategories/{id} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isTeacher();
-    }
-
+    // Materials (teachers create/update; all school users read)
     match /materials/{id} {
-      allow read: if isSignedIn();
-      allow create, update, delete: if isTeacher();
+      allow read: if isSchoolUser();
+      allow create, update: if isTeacher();
+      allow delete: if false;
+    }
+    match /{path=**}/materials/{id} {
+      allow read: if isSchoolUser();
+      allow create, update: if isTeacher();
+      allow delete: if false;
     }
 
-    // Contact notifications
-    match /notifications/{id} {
-      // Anyone can submit the contact form
-      allow create: if request.resource.data.type == 'contact';
-      // Only teachers can read/update/delete
-      allow read, update, delete: if isTeacher();
+    // Courses and nested materials
+    match /courses/{cid} {
+      allow read: if isSchoolUser();
+      allow write: if false;
+    }
+    match /courses/{cid}/materials/{mid} {
+      allow read: if isSchoolUser();
+      allow create, update: if isTeacher();
+      allow delete: if false;
     }
 
-    match /rtcRooms/{roomId} {
-      allow read, write: if request.auth != null;
-      match /callerCandidates/{cid} { allow read, write: if request.auth != null; }
-      match /calleeCandidates/{cid} { allow read, write: if request.auth != null; }
+    // Optional: tracking collections keyed by user
+    match /recentMaterials/{uid}/{mid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
+    }
+    match /materialViews/{uid}/{mid} {
+      allow read, write: if isSignedIn() && request.auth.uid == uid;
     }
 
+    // Classes
     match /classes/{id} {
-      // Teacher can CRUD their classes
       allow create: if isTeacher() && request.resource.data.teacherUid == request.auth.uid;
-      allow read: if isTeacher() && resource.data.teacherUid == request.auth.uid;
+      allow read: if (isTeacher() && resource.data.teacherUid == request.auth.uid)
+               || (isSignedIn() && request.auth.uid in resource.data.studentIds)
+               || (isSignedIn() && resource.data.viewerIds != null && request.auth.uid in resource.data.viewerIds);
       allow update, delete: if isTeacher() && resource.data.teacherUid == request.auth.uid;
-
-      // Students listed can read
-      allow read: if isSignedIn() && (resource.data.studentIds hasAny [request.auth.uid]);
     }
 
-    match /rescheduleRequests/{id} {
-      // Students can create for their classes
+    // Reschedule requests
+    match /rescheduleRequests/{rid} {
       allow create: if isSignedIn()
         && exists(/databases/$(database)/documents/classes/$(request.resource.data.classId))
-        && get(/databases/$(database)/documents/classes/$(request.resource.data.classId)).data.studentIds hasAny [request.auth.uid];
+        && request.auth.uid in get(/databases/$(database)/documents/classes/$(request.resource.data.classId)).data.studentIds;
 
-      // Teacher owning the class can read/update
       allow read, update: if isTeacher()
         && exists(/databases/$(database)/documents/classes/$(resource.data.classId))
         && get(/databases/$(database)/documents/classes/$(resource.data.classId)).data.teacherUid == request.auth.uid;
+
+      allow delete: if false;
     }
 
-    match /{document=**} { allow read, write: if false; }
+    // Top-level students collection (allow teachers to list)
+    match /students/{sid} {
+      allow read: if isTeacher();
+      allow write: if false;
+    }
+
+    // Materials Categories (teachers create/update; all school users read)
+    match /materialsCategories/{id} {
+      allow read: if isSchoolUser();
+      allow create, update: if isTeacher();
+      allow delete: if false;
+    }
   }
 }
