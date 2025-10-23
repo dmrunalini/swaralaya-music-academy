@@ -97,7 +97,8 @@ service cloud.firestore {
     // Top-level students collection (allow teachers to list)
     match /students/{sid} {
       allow read: if isTeacher();
-      allow write: if false;
+      allow update: if isTeacher();   // allow teachers to mark active: false
+      allow create, delete: if false;
     }
 
     // Materials Categories (teachers create/update; all school users read)
@@ -105,6 +106,30 @@ service cloud.firestore {
       allow read: if isSchoolUser();
       allow create, update: if isTeacher();
       allow delete: if false;
+    }
+
+    match /studentFees/{sid} {
+      // teachers can read/write fee status; students can read their own fee status
+      allow read: if isTeacher() || (isSignedIn() && request.auth.uid == sid);
+      allow create, update: if isTeacher();
+      allow delete: if false;
+    }
+
+    // Per-student monthly fee docs
+    match /studentFees/{sid}/months/{ym} {
+      allow read: if isTeacher() || (isSignedIn() && request.auth.uid == sid);
+      allow create, update: if isTeacher();
+      allow delete: if false;
+    }
+    match /{document=**}/months/{ym} {
+      allow read: if isTeacher();
+    }
+
+    match /notifications/{id} {
+      allow read, write: if isSignedIn();
+    }
+    match /{path=**}/notifications/{id} {
+      allow read, write: if isSignedIn();
     }
   }
 }

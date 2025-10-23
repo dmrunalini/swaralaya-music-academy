@@ -1,0 +1,59 @@
+<div class="wrap">
+  <h2>All Students</h2>
+
+  <div class="row">
+    <input type="search" placeholder="Search by name" [(ngModel)]="search" />
+    <span class="muted" *ngIf="filtered.length">{{ filtered.length }} found</span>
+  </div>
+
+  <div *ngIf="loading" class="muted">Loading…</div>
+  <div *ngIf="!loading && error" class="error">{{ error }}</div>
+  <div *ngIf="!loading && !error && filtered.length === 0" class="muted">No students found.</div>
+
+  <div class="list" *ngIf="filtered.length > 0">
+    <div class="head row grid">
+      <div>Name</div>
+      <div>Fee status</div>
+      <div>Actions</div>
+    </div>
+
+    <div class="row grid" *ngFor="let s of filtered">
+      <div><strong>{{ s.name }}</strong></div>
+      <div>
+        <span class="chip" [class.paid]="s.feeStatus === 'paid'" [class.declined]="s.feeStatus === 'declined'">
+          {{ s.feeStatus || 'pending' }} ({{ currentMonthLabel }})
+        </span>
+      </div>
+      <div class="actions">
+        <select (change)="onAction(s, $any($event.target).value); $any($event.target).value='';">
+          <option value="" selected>Choose action…</option>
+          <option value="schedule3m">Schedule class for next 3 months</option>
+          <option value="reviewFee" [disabled]="s.feeStatus === 'paid'">Review fee status</option>
+          <option value="inactive">Make student inactive</option>
+        </select>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Simple Fee Review Modal -->
+<div class="modal-backdrop" *ngIf="feeModalOpen" (click)="closeFeeModal()"></div>
+<div class="modal" *ngIf="feeModalOpen">
+  <div class="modal-header">
+    <h3>Review fee status</h3>
+    <button class="close" (click)="closeFeeModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <p>
+      Set fee status for <strong>{{ selected?.name }}</strong> — <strong>{{ currentMonthLabel }}</strong>
+    </p>
+    <p class="muted">
+      Amount: <strong>{{ selected?.feeAmount != null ? (selected?.feeAmount | number:'1.0-2') : '—' }}</strong>
+    </p>
+  </div>
+  <div class="modal-actions">
+    <button class="approve" (click)="confirmFee('paid')">Approve</button>
+    <button class="deny" (click)="confirmFee('declined')">Deny</button>
+    <button class="muted-btn" (click)="closeFeeModal()">Cancel</button>
+  </div>
+</div>

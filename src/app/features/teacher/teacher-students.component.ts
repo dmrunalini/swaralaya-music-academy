@@ -1,161 +1,261 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterModule, Router } from '@angular/router';
-import type { TeacherStudentListItem, StudentFee } from '../../core/services/auth.service';
-import { AuthService, AppUser } from '../../core/services/auth.service';
+import { FormsModule } from '@angular/forms';
+import {
+  getFirestore,
+  collection,
+  onSnapshot,
+  doc,
+  setDoc,
+  serverTimestamp,
+  getDoc,
+  collectionGroup,
+  query,
+  where,
+  orderBy,
+  limit,
+  getDocs,
+  setLogLevel
+} from 'firebase/firestore';
+
+type FeeStatus = 'pending' | 'paid' | 'declined';
+
+type StudentRow = {
+  id: string;          // kept for display
+  name: string;
+  feeStatus?: FeeStatus;
+  feeAmount?: number | null;
+  uid: string;         // canonical key (student UID/doc id)
+};
+
+function ymNow(): string {
+  const d = new Date();
+  const m = (d.getMonth() + 1).toString().padStart(2, '0');
+  return `${d.getFullYear()}-${m}`;
+}
+function monthLabel(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  const d = new Date(y, (m || 1) - 1, 1);
+  return d.toLocaleString(undefined, { month: 'short', year: 'numeric' }); // e.g., Oct 2025
+}
 
 @Component({
   selector: 'app-teacher-students',
   standalone: true,
-  imports: [CommonModule, RouterModule],
-  styles: [`
-    .wrap { max-width: 1000px; margin: 24px auto; }
-    .card { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 6px 20px rgba(0,0,0,0.08); }
-    .title { margin: 0 0 12px; }
-    .actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 8px 0 16px; }
-    .btn { background: #2563eb; color: #fff; border: 0; border-radius: 8px; padding: 8px 12px; cursor: pointer; }
-    .btn.ghost { background: transparent; color: #1f2937; border: 1px solid #cbd5e1; }
-    .btn[disabled] { opacity: .5; cursor: not-allowed; }
-    .table { width: 100%; border-collapse: collapse; }
-    .table th, .table td { padding: 10px; border-bottom: 1px solid #e5e7eb; text-align: left; font-size: 14px; vertical-align: middle; }
-    .muted { color: #64748b; }
-    .error { color: #b91c1c; }
-    .badge { font-size: 11px; color: #065f46; background: #d1fae5; border: 1px solid #a7f3d0; padding: 2px 6px; border-radius: 999px; }
-    .badge.red { color: #7f1d1d; background: #fee2e2; border-color: #fecaca; }
-  `],
-  template: `
-    <div class="wrap">
-      <div class="card">
-        <h2 class="title">All Students</h2>
-        <div class="actions">
-          <button class="btn" type="button" (click)="load()" [disabled]="busy">Refresh</button>
-          <span class="muted">Month: {{ monthKey }}</span>
-          <span class="error" *ngIf="error">{{ error }}</span>
-        </div>
-
-        <ng-container *ngIf="!busy; else loading">
-          <table class="table" *ngIf="rows.length; else empty">
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Age</th>
-                <th>Current Month Fee</th>
-                <th>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr *ngFor="let s of rows">
-                <td>{{ s.firstName }} {{ s.lastName }}</td>
-                <td>{{ s.age || '-' }}</td>
-                <td>
-                  <ng-container *ngIf="feeFor(s.id); else nofee">
-                    <span>{{ feeFor(s.id)?.status | titlecase }}</span>
-                    <span *ngIf="feeFor(s.id)?.teacherStatus === 'approved'" class="badge">Approved</span>
-                    <span *ngIf="feeFor(s.id)?.teacherStatus === 'rejected'" class="badge red">Denied</span>
-                  </ng-container>
-                  <ng-template #nofee>
-                    <span class="muted">No submission</span>
-                  </ng-template>
-                </td>
-                <td>
-                  <button class="btn" type="button"
-                          (click)="approve(s.id!)"
-                          [disabled]="!feeFor(s.id) || feeFor(s.id)?.teacherStatus === 'approved' || busyAction">
-                    Approve
-                  </button>
-                  <button class="btn ghost" type="button"
-                          (click)="deny(s.id!)"
-                          [disabled]="!feeFor(s.id) || feeFor(s.id)?.teacherStatus === 'approved' || busyAction">
-                    Deny
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <ng-template #empty>
-            <p class="muted">No students found.</p>
-          </ng-template>
-        </ng-container>
-
-        <ng-template #loading>
-          <p class="muted">Loading…</p>
-        </ng-template>
-      </div>
-    </div>
-  `
+  imports: [CommonModule, FormsModule],
+  templateUrl: './teacher-students.component.html',
+  styleUrls: ['./teacher-students.component.css']
 })
-export class TeacherStudentsComponent implements OnInit {
-  user: AppUser | null = null;
-  rows: TeacherStudentListItem[] = [];
-  busy = false;
-  busyAction = false;
-  error = '';
-  monthKey = this.currentMonthKey();
-  private feeMap = new Map<string, StudentFee>(); // key: studentId
+export class TeacherStudentsComponent implements OnInit, OnDestroy {
+  loading = true;
+  error: string | null = null;
 
-  constructor(private auth: AuthService, private router: Router) {}
+  search = '';
+  students: StudentRow[] = [];
+
+  private db = getFirestore();
+  private stopStudents?: () => void;
+  private stopFees?: () => void;
+  private byId = new Map<string, StudentRow>(); // key by uid
+
+  // Debug toggle
+  private debug = true;
+  private d(...args: any[]) { if (this.debug) console.log('[TeacherStudents]', ...args); }
+
+  // Fee modal state
+  feeModalOpen = false;
+  selected?: StudentRow;
+  readonly currentYm = ymNow();
+  readonly currentMonthLabel = monthLabel(ymNow());
 
   ngOnInit(): void {
-    this.auth.user$.subscribe(u => {
-      this.user = u;
-      if (u?.role !== 'teacher') {
-        this.router.navigate(['/login']);
-        return;
+    if (this.debug) {
+      try { setLogLevel('debug'); } catch {}
+      this.d('ngOnInit start. currentYm=', this.currentYm, 'currentMonthLabel=', this.currentMonthLabel);
+    }
+
+    // Load students from top-level 'students'
+    const studentsRef = collection(this.db, 'students');
+    this.stopStudents = onSnapshot(
+      studentsRef,
+      snap => {
+        this.d('students onSnapshot: count=', snap.size);
+        const seen = new Set<string>();
+        snap.forEach(d => {
+          const data = d.data() as any;
+          const uid = String(data.uid || d.id);
+          const key = uid.toLowerCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+
+          const id = uid;
+          const name =
+            data.name ||
+            data.fullName ||
+            data.displayName ||
+            [data.firstName, data.lastName].filter(Boolean).join(' ') ||
+            data.email || id;
+
+          const existing = this.byId.get(uid);
+          const merged: StudentRow = {
+            id,
+            name,
+            feeStatus: existing?.feeStatus ?? 'pending',
+            feeAmount: existing?.feeAmount ?? null,
+            uid
+          };
+          this.byId.set(uid, merged);
+        });
+
+        this.rebuildList();
+        this.loading = false;
+        this.error = null;
+        this.d('students list rebuilt. total=', this.students.length);
+      },
+      err => {
+        console.error('[TeacherStudents] students onSnapshot error:', err);
+        this.error = 'Missing or insufficient permissions.';
+        this.loading = false;
+        this.students = [];
       }
-      this.load();
+    );
+
+    // Listen for fee status for the current month
+    const feesQ = query(
+      collectionGroup(this.db, 'months'),
+      where('ym', '==', this.currentYm)
+    );
+    this.stopFees = onSnapshot(
+      feesQ,
+      snap => {
+        snap.forEach(d => {
+          const data = d.data() as any;
+          // Get student UID from parent path
+          const uid = d.ref.parent.parent ? d.ref.parent.parent.id : '';
+          if (!uid) return;
+
+          const row = this.byId.get(uid) || { id: uid, name: uid, uid } as StudentRow;
+          row.feeStatus = (data.status as FeeStatus) || 'pending';
+          row.feeAmount = typeof data.amount === 'number'
+            ? data.amount
+            : (typeof data.amount === 'string' ? parseFloat(data.amount) : row.feeAmount ?? null);
+          this.byId.set(uid, row);
+        });
+        this.rebuildList();
+      },
+      err => console.error('[TeacherStudents] months collectionGroup error:', err)
+    );
+  }
+
+  ngOnDestroy(): void {
+    try { this.stopStudents?.(); } catch {}
+    try { this.stopFees?.(); } catch {}
+  }
+
+  private rebuildList() {
+    this.students = Array.from(this.byId.values()).sort((a, b) =>
+      (a.name || a.id).localeCompare(b.name || b.id)
+    );
+  }
+
+  get filtered(): StudentRow[] {
+    const q = this.search.trim().toLowerCase();
+    if (!q) return this.students;
+    return this.students.filter(s =>
+      (s.name || '').toLowerCase().includes(q) ||
+      s.id.toLowerCase().includes(q)
+    );
+  }
+
+  onAction(s: StudentRow, action: string) {
+    this.d('onAction', action, 'student=', s);
+    switch (action) {
+      case 'schedule3m':
+        alert(`Scheduling flow for ${s.name} (next 3 months) — implement as needed.`);
+        break;
+      case 'reviewFee':
+        this.openFeeModal(s);
+        break;
+      case 'inactive':
+        this.makeInactive(s);
+        break;
+      default:
+        break;
+    }
+  }
+
+  openFeeModal(s: StudentRow) {
+    this.d('openFeeModal for', s.uid, s.name, 'current feeStatus=', s.feeStatus, 'feeAmount=', s.feeAmount);
+    this.selected = s;
+    this.feeModalOpen = true;
+  }
+  closeFeeModal() {
+    this.feeModalOpen = false;
+    this.selected = undefined;
+  }
+
+  async confirmFee(status: FeeStatus) {
+    if (!this.selected) return;
+    const uid = this.selected.uid;
+    this.d('confirmFee begin', { uid, status, ym: this.currentYm });
+
+    // Optimistic UI update
+    const row = this.byId.get(uid);
+    if (row) {
+      row.feeStatus = status;
+      this.byId.set(uid, row);
+      this.rebuildList();
+      this.d('optimistic UI update applied for', uid, 'status=', status);
+    }
+
+    // Persist + read back
+    try {
+      await this.writeMonthlyFeeStatus(uid, this.currentYm, status);
+      this.d('writeMonthlyFeeStatus success for', uid, 'status=', status, 'ym=', this.currentYm);
+
+      // Read back to verify
+      const ref = doc(this.db, 'studentFees', uid);
+      const snap = await getDoc(ref);
+      const data = snap.exists() ? snap.data() as any : null;
+      const after = data?.statusByMonth?.[this.currentYm];
+      this.d('post-write read-back', { uid, exists: snap.exists(), afterStatus: after, fullDoc: data });
+    } catch (e) {
+      console.error('[TeacherStudents] writeMonthlyFeeStatus error:', e);
+    }
+
+    this.closeFeeModal();
+  }
+
+  // Use per-month doc instead of nested map
+  private async writeMonthlyFeeStatus(uid: string, ym: string, status: FeeStatus) {
+    const ref = doc(this.db, `studentFees/${uid}/months/${ym}`);
+    await setDoc(ref, {
+      ym,
+      status,
+      // amount: keep/null or set when you know it
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  }
+
+  private async makeInactive(s: StudentRow) {
+    if (!confirm(`Make ${s.name} inactive?`)) return;
+    this.d('makeInactive', s.uid);
+    const ref = doc(this.db, 'students', s.id);
+    await setDoc(ref, { active: false, updatedAt: serverTimestamp() } as any, { merge: true });
+  }
+
+  // Load fee history (last 12 months) for a student
+  async loadFeeHistory(uid: string): Promise<{ ym: string; status: FeeStatus; amount?: number|null }[]> {
+    const ref = collection(this.db, `studentFees/${uid}/months`);
+    // ym format YYYY-MM sorts lexicographically in chronological order
+    const snap = await getDocs(query(ref, orderBy('ym', 'desc'), limit(12)));
+    return snap.docs.map(d => {
+      const data = d.data() as any;
+      return {
+        ym: data.ym || d.id,
+        status: (data.status as FeeStatus) || 'pending',
+        amount: typeof data.amount === 'number' ? data.amount : null
+      };
     });
-  }
-
-  async load() {
-    if (!this.user) return;
-    this.busy = true; this.error = '';
-    try {
-      this.rows = await this.auth.listAllStudentsForTeacher();
-      await this.loadFees();
-    } catch (e: any) {
-      this.error = e?.message || 'Failed to load students';
-      this.rows = [];
-      this.feeMap.clear();
-    } finally {
-      this.busy = false;
-    }
-  }
-
-  private async loadFees() {
-    const fees = await this.auth.getMonthlyFeesForAllStudents(this.monthKey);
-    this.feeMap = new Map(fees.map(f => [f.studentId, f]));
-  }
-
-  feeFor(studentId?: string) {
-    return studentId ? this.feeMap.get(studentId) : undefined;
-  }
-
-  async approve(studentId: string) {
-    const fee = this.feeFor(studentId);
-    if (!fee?.id) return;
-    this.busyAction = true;
-    try {
-      await this.auth.teacherSetFeeDecision(fee.id, 'approved');
-      await this.loadFees();
-    } finally {
-      this.busyAction = false;
-    }
-  }
-
-  async deny(studentId: string) {
-    const fee = this.feeFor(studentId);
-    if (!fee?.id) return;
-    this.busyAction = true;
-    try {
-      await this.auth.teacherSetFeeDecision(fee.id, 'rejected');
-      await this.loadFees();
-    } finally {
-      this.busyAction = false;
-    }
-  }
-
-  private currentMonthKey(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
   }
 }
