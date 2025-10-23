@@ -21,11 +21,12 @@ import {
 type FeeStatus = 'pending' | 'paid' | 'declined';
 
 type StudentRow = {
-  id: string;          // kept for display
+  id: string;
   name: string;
   feeStatus?: FeeStatus;
   feeAmount?: number | null;
-  uid: string;         // canonical key (student UID/doc id)
+  uid: string;
+  active?: boolean;
 };
 
 function ymNow(): string {
@@ -68,13 +69,17 @@ export class TeacherStudentsComponent implements OnInit, OnDestroy {
   readonly currentYm = ymNow();
   readonly currentMonthLabel = monthLabel(ymNow());
 
+  // Inactivate modal state
+  inactivateModalOpen = false;
+  activateModalOpen = false;
+  selectedForActivation?: StudentRow;
+
   ngOnInit(): void {
     if (this.debug) {
       try { setLogLevel('debug'); } catch {}
       this.d('ngOnInit start. currentYm=', this.currentYm, 'currentMonthLabel=', this.currentMonthLabel);
     }
 
-    // Load students from top-level 'students'
     const studentsRef = collection(this.db, 'students');
     this.stopStudents = onSnapshot(
       studentsRef,
@@ -102,7 +107,8 @@ export class TeacherStudentsComponent implements OnInit, OnDestroy {
             name,
             feeStatus: existing?.feeStatus ?? 'pending',
             feeAmount: existing?.feeAmount ?? null,
-            uid
+            uid,
+            active: data.active
           };
           this.byId.set(uid, merged);
         });
@@ -152,10 +158,32 @@ export class TeacherStudentsComponent implements OnInit, OnDestroy {
     try { this.stopFees?.(); } catch {}
   }
 
+  // Open inactivate/activate modal
+  openInactivateModal(s: StudentRow) {
+    this.selectedForActivation = s;
+    this.inactivateModalOpen = true;
+  }
+  openActivateModal(s: StudentRow) {
+    this.selectedForActivation = s;
+    this.activateModalOpen = true;
+  }
+  closeInactivateModal() {
+    this.inactivateModalOpen = false;
+    this.selectedForActivation = undefined;
+  }
+  closeActivateModal() {
+    this.activateModalOpen = false;
+    this.selectedForActivation = undefined;
+  }
+
   private rebuildList() {
-    this.students = Array.from(this.byId.values()).sort((a, b) =>
-      (a.name || a.id).localeCompare(b.name || b.id)
-    );
+    // Sort: active students first, then inactive
+    this.students = Array.from(this.byId.values()).sort((a, b) => {
+      if ((a.active ?? true) === (b.active ?? true)) {
+        return (a.name || a.id).localeCompare(b.name || b.id);
+      }
+      return (a.active ?? true) ? -1 : 1; // active first
+    });
   }
 
   get filtered(): StudentRow[] {
@@ -177,7 +205,10 @@ export class TeacherStudentsComponent implements OnInit, OnDestroy {
         this.openFeeModal(s);
         break;
       case 'inactive':
-        this.makeInactive(s);
+        this.openInactivateModal(s);
+        break;
+      case 'activate':
+        this.openActivateModal(s);
         break;
       default:
         break;
@@ -237,11 +268,20 @@ export class TeacherStudentsComponent implements OnInit, OnDestroy {
     }, { merge: true });
   }
 
-  private async makeInactive(s: StudentRow) {
-    if (!confirm(`Make ${s.name} inactive?`)) return;
-    this.d('makeInactive', s.uid);
-    const ref = doc(this.db, 'students', s.id);
+  // Inactivate student
+  async confirmInactivate() {
+    if (!this.selectedForActivation) return;
+    const ref = doc(this.db, 'students', this.selectedForActivation.id);
     await setDoc(ref, { active: false, updatedAt: serverTimestamp() } as any, { merge: true });
+    this.closeInactivateModal();
+  }
+
+  // Activate student
+  async confirmActivate() {
+    if (!this.selectedForActivation) return;
+    const ref = doc(this.db, 'students', this.selectedForActivation.id);
+    await setDoc(ref, { active: true, updatedAt: serverTimestamp() } as any, { merge: true });
+    this.closeActivateModal();
   }
 
   // Load fee history (last 12 months) for a student

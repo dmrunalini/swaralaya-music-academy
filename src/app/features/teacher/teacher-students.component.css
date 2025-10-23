@@ -29,3 +29,8 @@
 .approve { background:#16a34a; color:#fff; border:none; padding:8px 12px; border-radius:6px; }
 .deny { background:#b91c1c; color:#fff; border:none; padding:8px 12px; border-radius:6px; }
 .muted-btn { background:#e5e7eb; color:#111827; border:none; padding:8px 12px; border-radius:6px; }
+.inactive {
+  background: #f3f4f6 !important;
+  color: #9ca3af !important;
+  opacity: 0.7;
+}

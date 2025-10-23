@@ -1,11 +1,9 @@
 <div class="wrap">
   <h2>All Students</h2>
-
   <div class="row">
     <input type="search" placeholder="Search by name" [(ngModel)]="search" />
     <span class="muted" *ngIf="filtered.length">{{ filtered.length }} found</span>
   </div>
-
   <div *ngIf="loading" class="muted">Loading…</div>
   <div *ngIf="!loading && error" class="error">{{ error }}</div>
   <div *ngIf="!loading && !error && filtered.length === 0" class="muted">No students found.</div>
@@ -16,8 +14,11 @@
       <div>Fee status</div>
       <div>Actions</div>
     </div>
-
-    <div class="row grid" *ngFor="let s of filtered">
+    <div
+      class="row grid"
+      *ngFor="let s of filtered"
+      [class.inactive]="s.active === false"
+    >
       <div><strong>{{ s.name }}</strong></div>
       <div>
         <span class="chip" [class.paid]="s.feeStatus === 'paid'" [class.declined]="s.feeStatus === 'declined'">
@@ -25,11 +26,14 @@
         </span>
       </div>
       <div class="actions">
-        <select (change)="onAction(s, $any($event.target).value); $any($event.target).value='';">
+        <select
+          (change)="onAction(s, $any($event.target).value); $any($event.target).value='';"
+        >
           <option value="" selected>Choose action…</option>
           <option value="schedule3m">Schedule class for next 3 months</option>
           <option value="reviewFee" [disabled]="s.feeStatus === 'paid'">Review fee status</option>
-          <option value="inactive">Make student inactive</option>
+          <option *ngIf="s.active !== false" value="inactive">Make student inactive</option>
+          <option *ngIf="s.active === false" value="activate">Activate student</option>
         </select>
       </div>
     </div>
@@ -55,5 +59,41 @@
     <button class="approve" (click)="confirmFee('paid')">Approve</button>
     <button class="deny" (click)="confirmFee('declined')">Deny</button>
     <button class="muted-btn" (click)="closeFeeModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- Inactivate Modal -->
+<div class="modal-backdrop" *ngIf="inactivateModalOpen" (click)="closeInactivateModal()"></div>
+<div class="modal" *ngIf="inactivateModalOpen">
+  <div class="modal-header">
+    <h3>Inactivate Student</h3>
+    <button class="close" (click)="closeInactivateModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <p>
+      Are you sure you want to inactivate <strong>{{ selectedForActivation?.name }}</strong>?
+    </p>
+  </div>
+  <div class="modal-actions">
+    <button class="deny" (click)="confirmInactivate()">Inactivate</button>
+    <button class="muted-btn" (click)="closeInactivateModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- Activate Modal -->
+<div class="modal-backdrop" *ngIf="activateModalOpen" (click)="closeActivateModal()"></div>
+<div class="modal" *ngIf="activateModalOpen">
+  <div class="modal-header">
+    <h3>Activate Student</h3>
+    <button class="close" (click)="closeActivateModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <p>
+      Do you want to activate <strong>{{ selectedForActivation?.name }}</strong>?
+    </p>
+  </div>
+  <div class="modal-actions">
+    <button class="approve" (click)="confirmActivate()">Activate</button>
+    <button class="muted-btn" (click)="closeActivateModal()">Cancel</button>
   </div>
 </div>
