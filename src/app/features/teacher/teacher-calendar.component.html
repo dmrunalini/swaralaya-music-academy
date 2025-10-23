@@ -1,0 +1,84 @@
+<div class="calendar-wrap">
+  <table class="calendar-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th *ngFor="let day of calendarDays">
+          {{ weekDays[day.getDay()] }}<br>
+          {{ day | date:'MMM d' }}
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr *ngFor="let slot of timeSlots">
+        <td>{{ getSlotLabel(slot) }}</td>
+        <td *ngFor="let day of calendarDays">
+          <ng-container *ngFor="let c of getClassesForDay(day)">
+            <ng-container *ngIf="isClassInSlot(c, slot)">
+              <div class="class-block" (click)="openRescheduleModal(c)">
+                <span>{{ c.startTimeUtc | date:'shortTime' }} - {{ c.endTimeUtc | date:'shortTime' }}</span>
+                <span>{{ getStudentName(c.studentId) }}</span>
+              </div>
+            </ng-container>
+          </ng-container>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="calendar-actions">
+    <button (click)="openAddClassModal()">Add New Class</button>
+  </div>
+</div>
+
+<!-- Reschedule Modal -->
+<div class="modal-backdrop" *ngIf="showRescheduleModal" (click)="closeRescheduleModal()"></div>
+<div class="modal" *ngIf="showRescheduleModal">
+  <div class="modal-header">
+    <h3>Reschedule Class</h3>
+    <button class="close" (click)="closeRescheduleModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <label>New Start Time (UTC): <input type="datetime-local" #newStart /></label>
+    <label>New End Time (UTC): <input type="datetime-local" #newEnd /></label>
+  </div>
+  <div class="modal-actions">
+    <button class="approve" (click)="rescheduleClass(newStart.value, newEnd.value)">Reschedule</button>
+    <button class="deny" (click)="closeAndCancelClass(selectedClass.id)">Cancel Class</button>
+    <button class="muted-btn" (click)="closeRescheduleModal()">Close</button>
+  </div>
+</div>
+
+<!-- Add New Class Modal -->
+<div class="modal-backdrop" *ngIf="showAddClassModal" (click)="closeAddClassModal()"></div>
+<div class="modal" *ngIf="showAddClassModal">
+  <div class="modal-header">
+    <h3>Add New Class</h3>
+    <button class="close" (click)="closeAddClassModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <form #addClassForm="ngForm">
+      <label>Date:
+        <input type="date" [(ngModel)]="newClass.date" name="date" required />
+      </label>
+      <label>Start Time:
+        <input type="time" [(ngModel)]="newClass.startTime" name="startTime" required />
+      </label>
+      <label>End Time:
+        <input type="time" [(ngModel)]="newClass.endTime" name="endTime" required />
+      </label>
+      <label>Student Name:
+        <select [(ngModel)]="newClass.studentId" name="studentId" required>
+          <option *ngFor="let s of students" [value]="s.uid">{{ s.name }}</option>
+        </select>
+      </label>
+      <div class="muted" style="margin-top:8px;">
+        Class will be scheduled in your time zone: <strong>{{ teacherTz }}</strong>
+      </div>
+    </form>
+  </div>
+  <div class="modal-actions">
+    <button class="approve" (click)="addClass()">Add</button>
+    <button class="muted-btn" (click)="closeAddClassModal()">Cancel</button>
+  </div>
+</div>

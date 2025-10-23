@@ -1,0 +1,44 @@
+.calendar-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.calendar-table th, .calendar-table td {
+  border: 1px solid #e5e7eb;
+  padding: 8px;
+  text-align: center;
+  min-width: 110px;
+}
+.calendar-table th:first-child, .calendar-table td:first-child {
+  background: #f3f4f6;
+  font-weight: bold;
+  text-align: right;
+}
+.class-block {
+  background: #e0f2fe;
+  margin: 4px 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.calendar-actions {
+  margin-top: 16px;
+  text-align: right;
+}
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+}
+.modal {
+  position: fixed; left: 50%; top: 20%;
+  transform: translateX(-50%);
+  width: min(400px, 92vw);
+  background: #fff; border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.2);
+  padding: 14px;
+}
+.modal-header { display:flex; align-items:center; justify-content:space-between; }
+.modal-header h3 { margin:0; font-size: 18px; }
+.modal-header .close { border:none; background:transparent; font-size: 20px; cursor: pointer; }
+.modal-body { padding: 8px 0 12px; }
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; }
+.approve { background:#16a34a; color:#fff; border:none; padding:8px 12px; border-radius:6px; }
+.deny { background:#b91c1c; color:#fff; border:none; padding:8px 12px; border-radius:6px; }
+.muted-btn { background:#e5e7eb; color:#111827; border:none; padding:8px 12px; border-radius:6px; }

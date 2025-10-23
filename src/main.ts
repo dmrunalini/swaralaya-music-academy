@@ -26,6 +26,9 @@ import { getFirestore, provideFirestore } from '@angular/fire/firestore';
 import { getFunctions, provideFunctions } from '@angular/fire/functions';
 import { getMessaging, provideMessaging } from '@angular/fire/messaging';
 import { TeacherNotificationsComponent } from './app/features/teacher/teacher-notifications.component';
+import { TeacherCalendarComponent } from '@app/features/teacher/teacher-calendar.component';
+import { CommonModule } from '@angular/common'; 
+
 
 const routes: Routes = [
   { path: '', component: HomePublicComponent },
@@ -43,6 +46,7 @@ const routes: Routes = [
   { path: 'contact', component: ContactComponent },
   { path: 'about', redirectTo: 'contact', pathMatch: 'full' }, // keep old path working (optional)
   { path: 'materials', component: MaterialsMenuComponent },
+   { path: 'teacher/calendar', component: TeacherCalendarComponent },
   { path: 'teacher/materials', component: MaterialsMenuComponent },
   { path: 'student/materials', component: MaterialsMenuComponent },
   { path: 'class/:id/video', component: VideoSessionComponent },

@@ -15,8 +15,11 @@ import {
   orderBy,
   limit,
   getDocs,
-  setLogLevel
+  setLogLevel,
+  addDoc
 } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
+import { DateTime } from 'luxon'; // install luxon if not present
 
 type FeeStatus = 'pending' | 'paid' | 'declined';
 
@@ -297,5 +300,52 @@ export class TeacherStudentsComponent implements OnInit, OnDestroy {
         amount: typeof data.amount === 'number' ? data.amount : null
       };
     });
+  }
+
+  async scheduleRecurringClasses(student: StudentRow, options: {
+    startDate: Date,
+    time: string, // "HH:mm"
+    durationMinutes: number,
+    daysOfWeek: number[], // [1,3] for Mon/Wed
+    count: number,
+    teacherTz: string,
+    studentTz: string
+  }) {
+    const { startDate, time, durationMinutes, daysOfWeek, count, teacherTz, studentTz } = options;
+    let occurrences: { startUtc: string; endUtc: string }[] = [];
+    let dt = DateTime.fromJSDate(startDate, { zone: teacherTz }).set({
+      hour: Number(time.split(':')[0]),
+      minute: Number(time.split(':')[1])
+    });
+
+    let added = 0;
+    while (added < count) {
+      if (daysOfWeek.includes(dt.weekday)) {
+        const startUtc = dt.toUTC().toISO();
+        const endUtc = dt.plus({ minutes: durationMinutes }).toUTC().toISO();
+        occurrences.push({ startUtc, endUtc });
+        added++;
+      }
+      dt = dt.plus({ days: 1 });
+    }
+
+    // Get teacher UID from Firebase Auth
+    const auth = getAuth();
+    const teacherId = auth.currentUser?.uid;
+    if (!teacherId) throw new Error('Teacher not logged in');
+
+    // Write each occurrence to Firestore
+    for (const occ of occurrences) {
+      await addDoc(collection(this.db, 'classes'), {
+        studentId: student.uid,
+        teacherId: teacherId,
+        startTimeUtc: occ.startUtc,
+        endTimeUtc: occ.endUtc,
+        status: 'scheduled',
+        teacherTz,
+        studentTz,
+        createdAt: Date.now()
+      });
+    }
   }
 }
