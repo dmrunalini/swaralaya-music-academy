@@ -1,3 +1,64 @@
+.wrap { padding: 12px; }
+
+/* header */
+.calendar-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+.nav { display:flex; align-items:center; gap:12px; }
+.week-label { font-weight:600; }
+
+/* scroller wrapper */
+.calendar-grid-wrapper {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fff;
+}
+
+/* grid: each day is a vertical column */
+.calendar-grid {
+  display: flex;
+  min-width: 840px; /* at least 7 * 120px */
+  gap: 8px;
+  padding: 8px;
+}
+
+.day-column {
+  min-width: 200px;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  border-left: 1px solid #f3f4f6;
+  padding: 6px;
+  background: #fafafa;
+  border-radius: 4px;
+}
+
+.day-header { text-align:center; padding:6px 0; border-bottom:1px solid #f3f4f6; margin-bottom:6px; }
+.day-name { font-weight:700; }
+.day-date { color:#6b7280; font-size:0.9rem; }
+
+.day-body { display:flex; flex-direction:column; gap:8px; padding:6px 0; max-height:520px; overflow-y:auto; }
+
+/* slot styles */
+.class-block {
+  background:#fff;
+  border:1px solid #e6e7ea;
+  padding:8px;
+  border-radius:6px;
+}
+.slot-time { font-size:0.9rem; color:#111827; font-weight:600; }
+.slot-title { font-size:0.95rem; color:#0f172a; margin-top:4px; }
+.slot-meta { font-size:0.85rem; color:#6b7280; margin-top:6px; }
+
+/* muted / no slots */
+.muted, .no-slots { color:#9ca3af; font-style:italic; text-align:center; padding:8px 0; }
+
+/* responsive: allow columns shrink but keep horizontal scroll */
+@media (max-width: 900px) {
+  .calendar-grid { min-width: 900px; }
+  .day-column { min-width: 180px; }
+}
+
 .calendar-table {
   width: 100%;
   border-collapse: collapse;
@@ -39,6 +100,44 @@
 .modal-header .close { border:none; background:transparent; font-size: 20px; cursor: pointer; }
 .modal-body { padding: 8px 0 12px; }
 .modal-actions { display:flex; gap:10px; justify-content:flex-end; }
-.approve { background:#16a34a; color:#fff; border:none; padding:8px 12px; border-radius:6px; }
-.deny { background:#b91c1c; color:#fff; border:none; padding:8px 12px; border-radius:6px; }
+.approve {
+  background: #16a34a; /* green when enabled */
+  color: #ffffff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: filter 120ms ease, box-shadow 120ms ease;
+}
+/* Hover effect when enabled */
+.approve:not(:disabled):hover {
+  filter: brightness(0.95);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+}
+/* Disabled state: grey, not clickable */
+.approve:disabled,
+.approve[disabled] {
+  background: #9ca3af; /* grey */
+  color: #ffffff;
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.95;
+  box-shadow: none;
+}
+/* Optional: ensure other modal buttons look consistent */
+.deny {
+  background: #ef4444; /* red for destructive */
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.deny:disabled,
+.deny[disabled] {
+  background: #fca5a5;
+  cursor: not-allowed;
+  pointer-events: none;
+  opacity: 0.9;
+}
 .muted-btn { background:#e5e7eb; color:#111827; border:none; padding:8px 12px; border-radius:6px; }

@@ -1,105 +1,148 @@
 <div class="calendar-wrap">
-  <table class="calendar-table">
-    <thead>
-      <tr>
-        <th>Time</th>
-        <th *ngFor="let day of calendarDays">
-          {{ weekDays[day.getDay()] }}<br>{{ day | date:'MMM d' }}
-        </th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr *ngFor="let slot of timeSlots">
-        <td>{{ slot }}</td>
-        <td *ngFor="let day of calendarDays">
-          <ng-container *ngFor="let c of getClassesForDay(day)">
-            <div *ngIf="isClassInSlot(c, slot, day)" class="class-block" (click)="openRescheduleModal(c)">
-              <div>{{ c.startTimeUtc | date:'shortTime' }} - {{ c.endTimeUtc | date:'shortTime' }}</div>
-            </div>
-          </ng-container>
+  <div class="calendar-header">
+    <div class="nav">
+      <button type="button" class="muted-btn" (click)="prevWeek()">‹ Prev</button>
+      <div class="week-label">{{ currentWeekLabel }}</div>
+      <button type="button" class="muted-btn" (click)="nextWeek()">Next ›</button>
+    </div>
+  </div>
 
-          <!-- click empty cell to add class for that day+slot -->
-          <div class="empty-slot" (click)="openAddClassModal(day.toISOString().slice(0,10))"></div>
-        </td>
-      </tr>
-    </tbody>
-  </table>
+  <div class="calendar-grid-wrapper">
+    <div class="calendar-grid">
+      <div class="day-column" *ngFor="let day of calendarDays">
+        <div class="day-header">
+          <div class="day-name">{{ day | date:'EEE' }}</div>
+          <div class="day-date">{{ day | date:'MMM d' }}</div>
+        </div>
 
-  <div class="calendar-actions">
-    <button (click)="openAddClassModal()">Add New Class</button>
+        <div class="day-body">
+          <div *ngIf="getBookedForDay(day).length === 0" class="muted no-slots">No booked slots</div>
+
+          <div *ngFor="let c of getBookedForDay(day)" class="class-block" (click)="openRescheduleModal(c)">
+            <div class="slot-time">{{ c.startTimeUtc | date:'shortTime' }} - {{ c.endTimeUtc | date:'shortTime' }}</div>
+            <div class="slot-title">{{ getStudentDisplay(c) }}</div>
+            <div class="slot-meta" *ngIf="c.status && c.status !== 'scheduled'">{{ c.status }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
-<!-- Add New Class Modal -->
-<div class="modal-backdrop" *ngIf="showAddClassModal" (click)="closeAddClassModal()"></div>
-<div class="modal" *ngIf="showAddClassModal">
-  <div class="modal-header"><h3>Add New Class</h3><button class="close" (click)="closeAddClassModal()">×</button></div>
-  <div class="modal-body">
-    <form #addClassForm="ngForm">
-      <label>Date:
-        <input type="date" [(ngModel)]="newClass.date" name="date" required (change)="onDateOrDurationChange()" />
-      </label>
-
-      <label>Start Time:
-        <select [(ngModel)]="newClass.startTime" name="startTime" required>
-          <option *ngFor="let slot of availableSlots" [value]="slot">{{ slot | date:'shortTime' }}</option>
-        </select>
-      </label>
-
-      <label>Duration:
-        <select [(ngModel)]="newClass.durationMinutes" name="durationMinutes" required (change)="onDateOrDurationChange()">
-          <option [value]="30">30 min</option>
-          <option [value]="45">45 min</option>
-          <option [value]="60">60 min</option>
-        </select>
-      </label>
-
-      <label>Student ID:
-        <input [(ngModel)]="newClass.studentId" name="studentId" />
-      </label>
-
-      <div class="muted">Time zone: <strong>{{ tz }}</strong></div>
-    </form>
-  </div>
-  <div class="modal-actions">
-    <button class="approve" (click)="addClass()" [disabled]="busy">Create</button>
-    <button class="muted-btn" (click)="closeAddClassModal()">Cancel</button>
-  </div>
-</div>
-
-<!-- Reschedule Modal -->
-<div class="modal-backdrop" *ngIf="showRescheduleModal" (click)="closeRescheduleModal()"></div>
+<!-- Reschedule / Cancel Modal -->
+<div class="modal-backdrop" *ngIf="showRescheduleModal"></div>
 <div class="modal" *ngIf="showRescheduleModal">
   <div class="modal-header">
-    <h3>Reschedule Class</h3>
+    <h3>Manage slot</h3>
     <button class="close" (click)="closeRescheduleModal()">×</button>
   </div>
+
   <div class="modal-body">
-    <form #rescheduleForm="ngForm">
-      <label>Date:
-        <input type="date" [(ngModel)]="rescheduleDate" name="rescheduleDate" (change)="onRescheduleDateOrDurationChange()" required />
+    <div *ngIf="selectedClass">
+      <label>Student
+        <input type="text" [value]="getStudentDisplay(selectedClass)" readonly />
       </label>
 
-      <label>Start Time:
-        <select [(ngModel)]="rescheduleStartTime" name="rescheduleStartTime" required>
-          <option *ngFor="let slot of rescheduleAvailableSlots" [value]="slot">{{ slot | date:'shortTime' }}</option>
+      <label style="display:block;margin-top:8px">Date
+        <input type="date" [(ngModel)]="rescheduleDate" (change)="onRescheduleDateOrDurationChange()" />
+      </label>
+
+      <label style="display:block;margin-top:8px">Start time
+        <select [(ngModel)]="rescheduleStartTime" (change)="onRescheduleDateOrDurationChange()">
+          <option value="">Select time…</option>
+          <option *ngFor="let t of timeSlots" [value]="t">{{ t }}</option>
         </select>
       </label>
 
-      <label>Duration:
-        <select [(ngModel)]="rescheduleDurationMinutes" name="rescheduleDurationMinutes" (change)="onRescheduleDateOrDurationChange()">
+      <label style="display:block;margin-top:8px">Duration
+        <select [(ngModel)]="rescheduleDurationMinutes" (change)="onRescheduleDateOrDurationChange()">
           <option [value]="30">30 min</option>
           <option [value]="45">45 min</option>
           <option [value]="60">60 min</option>
         </select>
       </label>
 
-      <div class="muted">Time zone: <strong>{{ tz }}</strong></div>
-    </form>
+      <div *ngIf="reschedulePreviewCount !== null" style="margin-top:8px">
+        <small *ngIf="reschedulePreviewCount === 0">No occurrences for day</small>
+        <small *ngIf="!rescheduleAvailable && reschedulePreviewCount > 0" class="error-red">
+          Selected slot is not available. Please choose a different time.
+        </small>
+        <small *ngIf="rescheduleAvailable && reschedulePreviewCount > 0" style="color:green">
+          Slot available.
+        </small>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-actions">
+    <button class="approve" type="button" (click)="rescheduleClass()" [disabled]="!rescheduleAvailable || busy">Reschedule</button>
+    <button class="deny" type="button" (click)="closeAndCancelClass(selectedClass?.id)" [disabled]="busy">Cancel slot</button>
+    <button class="muted-btn" type="button" (click)="closeRescheduleModal()">Close</button>
+  </div>
+</div>
+
+<!-- Result modal -->
+<div class="modal-backdrop" *ngIf="rescheduleResultOpen" (click)="rescheduleResultOpen = false"></div>
+<div class="modal" *ngIf="rescheduleResultOpen">
+  <div class="modal-header">
+    <h3>Result</h3>
+  </div>
+  <div class="modal-body">
+    <p *ngIf="rescheduleResultMessage" [innerText]="rescheduleResultMessage"></p>
   </div>
   <div class="modal-actions">
-    <button class="approve" (click)="rescheduleClass()" [disabled]="busy">Save</button>
-    <button class="danger" (click)="closeAndCancelClass(selectedClass?.id)">Cancel Class</button>
-    <button class="muted-btn" (click)="closeRescheduleModal()">Close</button>
+    <button class="approve" (click)="rescheduleResultOpen = false">Close</button>
+  </div>
+</div>
+
+<!-- Schedule new class button -->
+<div class="calendar-actions">
+  <button class="approve" type="button" (click)="openAddClassModal()" [disabled]="busy">Schedule new class</button>
+</div>
+
+<!-- Schedule new class modal -->
+<div class="modal-backdrop" *ngIf="showAddClassModal"></div>
+<div class="modal" *ngIf="showAddClassModal">
+  <div class="modal-header">
+    <h3>Schedule new class</h3>
+    <button class="close" (click)="closeAddClassModal()">×</button>
+  </div>
+
+  <div class="modal-body">
+    <label>Student
+      <select [(ngModel)]="newClass.studentId" name="studentId">
+        <option value="">Select student…</option>
+        <option *ngFor="let s of studentsList" [value]="s.id">{{ s.name }}</option>
+      </select>
+    </label>
+
+    <label style="display:block;margin-top:8px">Date
+      <input type="date" [(ngModel)]="newClass.date" (change)="onDateOrDurationChange()" name="newDate" />
+    </label>
+
+    <label style="display:block;margin-top:8px">Duration
+      <select [(ngModel)]="newClass.durationMinutes" (change)="onDateOrDurationChange()" name="newDuration">
+        <option [value]="30">30 min</option>
+        <option [value]="45">45 min</option>
+        <option [value]="60">60 min</option>
+      </select>
+    </label>
+
+    <label style="display:block;margin-top:8px">Start time
+      <select [(ngModel)]="newClass.startTime" name="newStartTime">
+        <option value="">Select time…</option>
+        <option *ngFor="let slot of availableSlots" [value]="slot">{{ slot | date:'shortTime' }}</option>
+      </select>
+    </label>
+
+    <div style="margin-top:8px;">
+      <small *ngIf="availableSlots.length === 0 && newClass.date">No available slots for selected date/duration.</small>
+      <small *ngIf="newClass.startTime && !isNewClassSlotAvailable" class="error-red">Selected slot is not available. Choose another.</small>
+    </div>
+  </div>
+
+  <div class="modal-actions">
+    <button class="approve" type="button" (click)="addClass()" [disabled]="!isNewClassSlotAvailable || busy">Schedule</button>
+    <button class="muted-btn" type="button" (click)="closeAddClassModal()" [disabled]="busy">Cancel</button>
   </div>
 </div>
