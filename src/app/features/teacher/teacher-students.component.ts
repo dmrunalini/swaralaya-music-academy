@@ -77,7 +77,40 @@ export class TeacherStudentsComponent implements OnInit, OnDestroy {
   activateModalOpen = false;
   selectedForActivation?: StudentRow;
 
-  ngOnInit(): void {
+  // --- scheduling modal state (added) ---
+  scheduleModalOpen = false;
+  scheduleStudent?: StudentRow;
+  scheduleDate: string = ymNow().slice(0,7) + '-01';
+  scheduleStartTime: string = '';
+  scheduleTime: string = '';             // <-- make blank by default
+  scheduleDurationMinutes: number = 60;
+  scheduleAvailableSlots: string[] = [];
+  scheduleBusy = false;
+  // --- end scheduling modal state ---
+
+  // added for weekly recurring scheduling UI
+  weekDayLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  timeSlotLabels: string[] = []; // filled on init
+  // no default weekday selected
+  selectedWeekdays: number[] = [];  // <-- start empty
+  recurringPreviewCount: number | null = null;
+  recurringConflictsCount = 0;
+
+  // map of studentId -> boolean (true if student already has recurring bookings for next 3 months)
+  isStudentRecurringMap: Record<string, boolean> = {};
+
+  // threshold to consider "recurrently booked" (adjust as needed)
+  private readonly RECURRING_THRESHOLD = 4;
+
+  // --- creation UI state (added) ---
+  creatingNoticeOpen = false;     // shows "creating slots will take a while..."
+  creationResultOpen = false;     // shows final result dialog
+  createdCount = 0;
+  skippedCount = 0;
+  creationError: string | null = null;
+  // --- end creation UI state ---
+
+  async ngOnInit() {
     if (this.debug) {
       try { setLogLevel('debug'); } catch {}
       this.d('ngOnInit start. currentYm=', this.currentYm, 'currentMonthLabel=', this.currentMonthLabel);
@@ -154,6 +187,15 @@ export class TeacherStudentsComponent implements OnInit, OnDestroy {
       },
       err => console.error('[TeacherStudents] months collectionGroup error:', err)
     );
+
+    // build time label list (04:00..20:00, 30-min steps)
+    for (let h = 4; h <= 20; h++) {
+      this.timeSlotLabels.push(`${h.toString().padStart(2, '0')}:00`);
+      this.timeSlotLabels.push(`${h.toString().padStart(2, '0')}:30`);
+    }
+
+    // refresh recurring flags (await is now allowed)
+    await this.refreshRecurringFlags();
   }
 
   ngOnDestroy(): void {
@@ -202,7 +244,8 @@ export class TeacherStudentsComponent implements OnInit, OnDestroy {
     this.d('onAction', action, 'student=', s);
     switch (action) {
       case 'schedule3m':
-        alert(`Scheduling flow for ${s.name} (next 3 months) — implement as needed.`);
+        // open scheduling modal for this student (single class scheduling)
+        this.openScheduleModal(s);
         break;
       case 'reviewFee':
         this.openFeeModal(s);
@@ -302,50 +345,380 @@ export class TeacherStudentsComponent implements OnInit, OnDestroy {
     });
   }
 
-  async scheduleRecurringClasses(student: StudentRow, options: {
-    startDate: Date,
-    time: string, // "HH:mm"
-    durationMinutes: number,
-    daysOfWeek: number[], // [1,3] for Mon/Wed
-    count: number,
-    teacherTz: string,
-    studentTz: string
-  }) {
-    const { startDate, time, durationMinutes, daysOfWeek, count, teacherTz, studentTz } = options;
-    let occurrences: { startUtc: string; endUtc: string }[] = [];
-    let dt = DateTime.fromJSDate(startDate, { zone: teacherTz }).set({
-      hour: Number(time.split(':')[0]),
-      minute: Number(time.split(':')[1])
-    });
+  async scheduleRecurringClassesWithOptions(student: StudentRow, options: {
+     startDate: Date,
+     time: string, // "HH:mm"
+     durationMinutes: number,
+     daysOfWeek: number[], // [1,3] for Mon/Wed
+     count: number,
+     teacherTz: string,
+     studentTz: string
+   }) {
+     const { startDate, time, durationMinutes, daysOfWeek, count, teacherTz, studentTz } = options;
+     let occurrences: { startUtc: string; endUtc: string }[] = [];
+     let dt = DateTime.fromJSDate(startDate, { zone: teacherTz }).set({
+       hour: Number(time.split(':')[0]),
+       minute: Number(time.split(':')[1])
+     });
+ 
+     let added = 0;
+     while (added < count) {
+       if (daysOfWeek.includes(dt.weekday)) {
+         const startUtc = dt.toUTC().toISO();
+         const endUtc = dt.plus({ minutes: durationMinutes }).toUTC().toISO();
+         occurrences.push({ startUtc, endUtc });
+         added++;
+       }
+       dt = dt.plus({ days: 1 });
+     }
+ 
+     // Get teacher UID from Firebase Auth
+     const auth = getAuth();
+     const teacherId = auth.currentUser?.uid;
+     if (!teacherId) throw new Error('Teacher not logged in');
+ 
+     // Write each occurrence to Firestore
+     for (const occ of occurrences) {
+       await addDoc(collection(this.db, 'classes'), {
+         studentId: student.uid,
+         teacherId: teacherId,
+         startTimeUtc: occ.startUtc,
+         endTimeUtc: occ.endUtc,
+         status: 'scheduled',
+         teacherTz,
+         studentTz,
+         createdAt: Date.now()
+       });
+     }
+   }
 
-    let added = 0;
-    while (added < count) {
-      if (daysOfWeek.includes(dt.weekday)) {
-        const startUtc = dt.toUTC().toISO();
-        const endUtc = dt.plus({ minutes: durationMinutes }).toUTC().toISO();
-        occurrences.push({ startUtc, endUtc });
-        added++;
-      }
-      dt = dt.plus({ days: 1 });
+  // Scheduling modal methods (added)
+  openScheduleModal(s: StudentRow) {
+    this.scheduleStudent = s;
+    this.selectedWeekdays = [];     // <-- clear selection
+    this.scheduleTime = '';         // <-- keep blank
+    this.scheduleDurationMinutes = 60;
+    this.scheduleAvailableSlots = [];
+    this.scheduleModalOpen = true;
+    this.recurringPreviewCount = null;
+    this.recurringConflictsCount = 0;
+    // don't call previewRecurringSlots() automatically since no selection yet
+  }
+
+  // ensure this method exists and properly resets modal state
+  closeScheduleModal() {
+    this.scheduleModalOpen = false;
+    this.scheduleStudent = undefined;
+    this.selectedWeekdays = [];
+    this.scheduleTime = '';
+    this.scheduleDurationMinutes = 60;
+    this.recurringPreviewCount = null;
+    this.recurringConflictsCount = 0;
+    this.scheduleAvailableSlots = [];
+    this.scheduleBusy = false;
+    // leave creation UI flags alone
+  }
+
+  private async fetchTeacherClassesInRange(teacherId: string, fromIso: string, toIso: string) {
+    const ref = collection(this.db, 'classes');
+    const q = query(ref, where('teacherId', '==', teacherId), where('startTimeUtc', '<', toIso));
+    const snap = await getDocs(q);
+    const docs = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+    return docs.filter((c: any) => (c.endTimeUtc ?? '') > fromIso && c.status !== 'cancelled');
+  }
+
+  async onScheduleDateOrDurationChange() {
+    if (!this.scheduleDate || !this.scheduleDurationMinutes || !this.scheduleStudent) {
+      this.scheduleAvailableSlots = [];
+      return;
     }
-
-    // Get teacher UID from Firebase Auth
     const auth = getAuth();
     const teacherId = auth.currentUser?.uid;
-    if (!teacherId) throw new Error('Teacher not logged in');
+    if (!teacherId) {
+      this.d('onScheduleDateOrDurationChange: teacher not logged in');
+      this.scheduleAvailableSlots = [];
+      return;
+    }
 
-    // Write each occurrence to Firestore
-    for (const occ of occurrences) {
+    // Generate candidate 30-min slots between 04:00 and 20:00 (local)
+    const candidates: string[] = [];
+    for (let h = 4; h <= 20; h++) {
+      for (const m of [0, 30]) {
+        const localIso = `${this.scheduleDate}T${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:00`;
+        // convert to ISO using Date (treats as local) -> UTC ISO
+        candidates.push(new Date(localIso).toISOString());
+      }
+    }
+
+    // fetch booked classes that might overlap this day
+    const dayStartUtc = new Date(`${this.scheduleDate}T00:00:00`).toISOString();
+    const dayEndUtc = new Date(`${this.scheduleDate}T23:59:59`).toISOString();
+    const booked = await this.fetchTeacherClassesInRange(teacherId, dayStartUtc, dayEndUtc);
+
+    const overlaps = (sStartIso: string, sEndIso: string) =>
+      booked.some((b: any) => !(sEndIso <= b.startTimeUtc || sStartIso >= b.endTimeUtc));
+
+    // filter candidates by duration
+    this.scheduleAvailableSlots = candidates.filter(slotStartIso => {
+      const start = new Date(slotStartIso);
+      const end = new Date(start.getTime() + this.scheduleDurationMinutes * 60000);
+      return !overlaps(start.toISOString(), end.toISOString());
+    });
+  }
+
+  async scheduleClass() {
+    if (!this.scheduleStudent) return;
+    if (!this.scheduleStartTime) { alert('Please choose a start time'); return; }
+    const auth = getAuth();
+    const teacherId = auth.currentUser?.uid;
+    if (!teacherId) { alert('Teacher not logged in'); return; }
+
+    this.scheduleBusy = true;
+    try {
+      const startUtc = new Date(this.scheduleStartTime).toISOString();
+      const endUtc = new Date(new Date(this.scheduleStartTime).getTime() + this.scheduleDurationMinutes * 60000).toISOString();
+
+      // conflict check
+      const overlapping = await this.fetchTeacherClassesInRange(teacherId, startUtc, endUtc);
+      if (overlapping.length) {
+        alert('Conflict: teacher already has a class at this time.');
+        return;
+      }
+
+      // create class doc
       await addDoc(collection(this.db, 'classes'), {
-        studentId: student.uid,
-        teacherId: teacherId,
-        startTimeUtc: occ.startUtc,
-        endTimeUtc: occ.endUtc,
+        studentId: this.scheduleStudent.uid,
+        teacherId,
+        startTimeUtc: startUtc,
+        endTimeUtc: endUtc,
         status: 'scheduled',
-        teacherTz,
-        studentTz,
         createdAt: Date.now()
       });
+      // optionally refresh UI by reloading students/classes where relevant
+      this.d('Scheduled class for', this.scheduleStudent.uid, startUtc, endUtc);
+      this.closeScheduleModal();
+    } catch (err) {
+      console.error('scheduleClass error', err);
+      alert('Failed to schedule class.');
+    } finally {
+      this.scheduleBusy = false;
     }
+  }
+
+  // toggle weekday selection (0 = Sun .. 6 = Sat)
+  toggleWeekday(day: number) {
+    const idx = this.selectedWeekdays.indexOf(day);
+    if (idx >= 0) this.selectedWeekdays.splice(idx, 1);
+    else this.selectedWeekdays.push(day);
+    // keep array sorted for predictability
+    this.selectedWeekdays.sort((a,b) => a - b);
+    void this.previewRecurringSlots();
+  }
+
+  // preview function: no-op if time or weekdays not chosen
+  async previewRecurringSlots() {
+    if (!this.scheduleStudent) return;
+    // require a chosen time and at least one weekday
+    if (!this.scheduleTime || !this.selectedWeekdays || this.selectedWeekdays.length === 0) {
+      this.recurringPreviewCount = null;
+      this.recurringConflictsCount = 0;
+      return;
+    }
+
+    const auth = getAuth();
+    const teacherId = auth.currentUser?.uid;
+    if (!teacherId) { this.recurringPreviewCount = 0; this.recurringConflictsCount = 0; return; }
+
+    const dates = this.getDatesForNext3MonthsByWeekdays(this.selectedWeekdays);
+    this.recurringPreviewCount = dates.length;
+    this.recurringConflictsCount = 0;
+
+    if (!dates.length) return;
+
+    // fetch teacher classes once for the whole date range
+    const fromIso = new Date(dates[0] + 'T00:00:00').toISOString();
+    const toIso = new Date(dates[dates.length - 1] + 'T23:59:59').toISOString();
+    const booked = await this.fetchTeacherClassesInRange(teacherId, fromIso, toIso);
+
+    let conflicts = 0;
+    for (const d of dates) {
+      const startUtc = new Date(`${d}T${this.scheduleTime}:00`).toISOString();
+      const endUtc = new Date(new Date(`${d}T${this.scheduleTime}:00`).getTime() + this.scheduleDurationMinutes * 60000).toISOString();
+      const overlap = booked.some((b: any) => !(endUtc <= b.startTimeUtc || startUtc >= b.endTimeUtc));
+      if (overlap) conflicts++;
+    }
+
+    this.recurringConflictsCount = conflicts;
+  }
+
+  // guard creation: ensure time and weekdays selected
+  requestScheduleRecurringClasses() {
+    if (!this.scheduleTime) { alert('Please select a start time.'); return; }
+    if (!this.selectedWeekdays || this.selectedWeekdays.length === 0) { alert('Please select at least one weekday.'); return; }
+    this.scheduleCreateRequested = true;
+    void this.scheduleRecurringClasses();
+  }
+
+  // schedule weekly occurrences across next 3 months (skips conflicts)
+  async scheduleRecurringClasses() {
+    // must be explicitly requested
+    if (!this.scheduleCreateRequested) {
+      console.warn('scheduleRecurringClasses called without explicit request — ignoring.');
+      return;
+    }
+    this.scheduleCreateRequested = false;
+
+    if (!this.scheduleStudent) return;
+    const auth = getAuth();
+    const teacherId = auth.currentUser?.uid;
+    if (!teacherId) { alert('Teacher not logged in'); return; }
+
+    // Capture student data locally BEFORE we close/reset the modal
+    const studentUid = this.scheduleStudent.uid;
+    const studentName = this.scheduleStudent.name;
+
+    const dates = this.getDatesForNext3MonthsByWeekdays(this.selectedWeekdays);
+    if (!dates.length) { alert('No occurrences found'); return; }
+
+    // build occurrences list
+    const occurrences = dates.map(date => {
+      const startUtc = new Date(`${date}T${this.scheduleTime}:00`).toISOString();
+      const endUtc = new Date(new Date(`${date}T${this.scheduleTime}:00`).getTime() + this.scheduleDurationMinutes * 60000).toISOString();
+      return { date, startUtc, endUtc };
+    });
+
+    // fetch booked classes once for the whole range to speed up conflict checks
+    const fromIso = occurrences[0].startUtc;
+    const toIso = occurrences[occurrences.length - 1].endUtc;
+    const booked = await this.fetchTeacherClassesInRange(teacherId, fromIso, toIso);
+
+    // check conflicts for ALL occurrences first (fail-fast)
+    let conflicts = 0;
+    for (const occ of occurrences) {
+      const overlapping = booked.filter((b: any) => !(occ.endUtc <= b.startTimeUtc || occ.startUtc >= b.endTimeUtc));
+      if (overlapping.length) conflicts++;
+    }
+
+    this.recurringPreviewCount = occurrences.length;
+    this.recurringConflictsCount = conflicts;
+
+    // close the schedule modal before showing any global dialogs
+    this.closeScheduleModal();
+
+    if (conflicts > 0) {
+      // show result dialog (no creations)
+      this.createdCount = 0;
+      this.skippedCount = conflicts;
+      this.creationError = null;
+      this.creationResultOpen = true;
+      return;
+    }
+
+    // show creating notice modal (non-blocking)
+    this.creatingNoticeOpen = true;
+    this.creationError = null;
+    this.createdCount = 0;
+    this.skippedCount = 0;
+
+    // allow UI to render the creating notice
+    await new Promise(resolve => setTimeout(resolve, 120));
+
+    // create all occurrences (no conflicts)
+    this.scheduleBusy = true;
+    let created = 0;
+    let skipped = 0;
+    try {
+      for (const occ of occurrences) {
+        try {
+          // double-check against booked (using earlier fetched list)
+          const overlapping = booked.filter((b: any) => !(occ.endUtc <= b.startTimeUtc || occ.startUtc >= b.endTimeUtc));
+          if (overlapping.length) { skipped++; continue; }
+
+          // use captured studentUid (not this.scheduleStudent)
+          await addDoc(collection(this.db, 'classes'), {
+            studentId: studentUid,
+            teacherId,
+            startTimeUtc: occ.startUtc,
+            endTimeUtc: occ.endUtc,
+            status: 'scheduled',
+            createdAt: Date.now()
+          });
+          created++;
+        } catch (err) {
+          console.error('Failed to create occurrence', occ, err);
+          skipped++;
+        }
+      }
+
+      this.createdCount = created;
+      this.skippedCount = skipped;
+      await this.refreshRecurringFlags();
+    } catch (err) {
+      console.error('scheduleRecurringClasses error', err);
+      if (typeof err === 'string') this.creationError = err;
+      else if (err && (err as any).message) this.creationError = (err as any).message;
+      else this.creationError = 'Unknown error';
+    } finally {
+      this.scheduleBusy = false;
+      this.creatingNoticeOpen = false;
+      this.creationResultOpen = true;
+    }
+  }
+
+  // guard to ensure create runs only when explicitly requested
+  private scheduleCreateRequested = false;
+
+  // call after scheduling recurring classes successfully
+  private async refreshRecurringFlags() {
+    const auth = getAuth();
+    const teacherId = auth.currentUser?.uid;
+    if (!teacherId) return;
+
+    const now = new Date();
+    const fromIso = now.toISOString();
+    const toIso = new Date(now.getTime() + 90 * 24 * 3600 * 1000).toISOString();
+
+    // fetch teacher's classes in the next 90 days (uses existing helper)
+    const classes = await this.fetchTeacherClassesInRange(teacherId, fromIso, toIso);
+
+    const counts = new Map<string, number>();
+    classes.forEach((c: any) => {
+      if (!c.studentId) return;
+      counts.set(c.studentId, (counts.get(c.studentId) || 0) + 1);
+    });
+
+    this.isStudentRecurringMap = {};
+    counts.forEach((count, studentId) => {
+      this.isStudentRecurringMap[studentId] = count >= this.RECURRING_THRESHOLD;
+    });
+  }
+
+  // safe display helper for template (prevents "object possibly null" errors)
+  get displayWeekdays(): string {
+    if (!this.selectedWeekdays || this.selectedWeekdays.length === 0) return '—';
+    return this.selectedWeekdays
+      .map(i => this.weekDayLabels[i] ?? '')
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  getDatesForNext3MonthsByWeekdays(weekdays: number[]): string[] {
+    const results: string[] = [];
+    if (!weekdays || weekdays.length === 0) return results;
+    const today = new Date();
+    const end = new Date(today.getTime() + 90 * 24 * 3600 * 1000); // 90 days ahead
+    for (let cur = new Date(today); cur <= end; cur.setDate(cur.getDate() + 1)) {
+      if (weekdays.includes(cur.getDay())) {
+        results.push(new Date(cur).toISOString().slice(0, 10)); // YYYY-MM-DD
+      }
+    }
+    return results;
+  }
+
+  // helper: true when every occurrence conflicts
+  get isAllOccurrencesConflict(): boolean {
+    return this.recurringPreviewCount !== null
+      && this.recurringPreviewCount > 0
+      && this.recurringPreviewCount === this.recurringConflictsCount;
   }
 }

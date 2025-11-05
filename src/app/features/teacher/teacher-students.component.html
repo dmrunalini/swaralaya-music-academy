@@ -30,10 +30,15 @@
           (change)="onAction(s, $any($event.target).value); $any($event.target).value='';"
         >
           <option value="" selected>Choose action…</option>
-          <option value="schedule3m">Schedule class for next 3 months</option>
-          <option value="reviewFee" [disabled]="s.feeStatus === 'paid'">Review fee status</option>
-          <option *ngIf="s.active !== false" value="inactive">Make student inactive</option>
-          <option *ngIf="s.active === false" value="activate">Activate student</option>
+          <option
+            value="schedule3m"
+            [disabled]="(s?.uid && isStudentRecurringMap) ? isStudentRecurringMap[s.uid] : false"
+            [title]="(s?.uid && isStudentRecurringMap && isStudentRecurringMap[s.uid]) ? 'Recurrent schedule exists for next 3 months' : ''">
+            Schedule class for next 3 months
+          </option>
+          <option value="reviewFee" [disabled]="s?.feeStatus === 'paid'">Review fee status</option>
+          <option *ngIf="s?.active !== false" value="inactive">Make student inactive</option>
+          <option *ngIf="s?.active === false" value="activate">Activate student</option>
         </select>
       </div>
     </div>
@@ -95,5 +100,130 @@
   <div class="modal-actions">
     <button class="approve" (click)="confirmActivate()">Activate</button>
     <button class="muted-btn" (click)="closeActivateModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- Students list (ensure each row has a Schedule button) 
+<div class="students">
+  <div class="student-row" *ngFor="let s of filtered">
+    <div class="student-name">{{ s.name }}</div>
+    <div class="actions">
+      <button type="button" (click)="onAction(s, 'schedule3m')">Schedule (3 months)</button>-->
+      <!-- other action buttons... 
+    </div>
+  </div>
+</div>-->
+
+<!-- Scheduling Modal -->
+<div class="modal-backdrop" *ngIf="scheduleModalOpen" (click)="closeScheduleModal()"></div>
+<div class="modal" *ngIf="scheduleModalOpen">
+  <div class="modal-header">
+    <h3>Schedule class for {{ scheduleStudent?.name }}</h3>
+    <button class="close" type="button" (click)="closeScheduleModal()">×</button>
+  </div>
+  <div class="modal-body">
+    <form #scheduleForm="ngForm">
+      <!-- Weekly / 3-month recurring UI -->
+      <label>Start time:
+        <select [(ngModel)]="scheduleTime" name="scheduleTime" (change)="previewRecurringSlots()">
+          <option value="">Select time…</option> <!-- <-- empty placeholder -->
+          <option *ngFor="let t of timeSlotLabels" [value]="t">{{ t }}</option>
+        </select>
+      </label>
+
+      <label>Duration:
+        <select [(ngModel)]="scheduleDurationMinutes" name="scheduleDurationMinutes" (change)="previewRecurringSlots()">
+          <option [value]="30">30 min</option>
+          <option [value]="45">45 min</option>
+          <option [value]="60">60 min</option>
+        </select>
+      </label>
+
+      <label>Week days:
+        <div class="weekday-checkboxes">
+          <label *ngFor="let d of weekDayLabels; let i = index" class="weekday">
+            <input
+              type="checkbox"
+              [checked]="selectedWeekdays.includes(i)"
+              (change)="toggleWeekday(i)"
+              [attr.aria-label]="weekDayLabels[i]" />
+            {{ d }}
+          </label>
+        </div>
+      </label>
+
+      <div class="muted" style="margin-top:8px;">
+        Scheduling weekly on <strong>{{ displayWeekdays }}</strong> at <strong>{{ scheduleTime }}</strong>
+        for the next <strong>3 months</strong>.
+      </div>
+
+      <div style="margin-top:8px;" *ngIf="recurringPreviewCount !== null">
+        <small *ngIf="recurringPreviewCount === 0">No occurrences in next 3 months.</small>
+
+        <!-- red message when all occurrences conflict -->
+        <small *ngIf="isAllOccurrencesConflict" class="error-red">
+          This slot is not available for the selected weekdays/time. Please choose a different time or weekdays.
+        </small>
+
+        <!-- show counts only when some occurrences are available -->
+        <small *ngIf="recurringPreviewCount > 0 && !isAllOccurrencesConflict">
+          Occurrences found: <strong>{{ recurringPreviewCount }}</strong>.
+          <span *ngIf="recurringConflictsCount">Conflicts: {{ recurringConflictsCount }}</span>
+        </small>
+      </div>
+    </form>
+  </div>
+
+  <div class="modal-actions">
+    <button class="approve" type="button"
+        (click)="requestScheduleRecurringClasses()"
+        [disabled]="scheduleBusy
+                    || !scheduleTime
+                    || (!selectedWeekdays || selectedWeekdays.length === 0)
+                    || isAllOccurrencesConflict">
+      Create
+    </button>
+    <button class="muted-btn" type="button" (click)="closeScheduleModal()">Cancel</button>
+  </div>
+</div>
+
+<!-- Creating notice modal (shown while writes are in progress) -->
+<div class="modal-backdrop" *ngIf="creatingNoticeOpen"></div>
+<div class="modal" *ngIf="creatingNoticeOpen">
+  <div class="modal-header">
+    <h3>Creating slots</h3>
+  </div>
+  <div class="modal-body">
+    <p>Creating slots will take a while. Please do not close this window.</p>
+    <p><em>Progress: saving classes to the server...</em></p>
+    <!-- optional spinner -->
+    <div class="spinner" aria-hidden="true" style="margin-top:8px;">⏳</div>
+  </div>
+</div>
+
+<!-- Creation result dialog (replaces alerts) -->
+<div class="modal-backdrop" *ngIf="creationResultOpen" (click)="creationResultOpen = false"></div>
+<div class="modal" *ngIf="creationResultOpen">
+  <div class="modal-header">
+    <h3>Schedule result</h3>
+  </div>
+  <div class="modal-body">
+    <div *ngIf="creationError" class="error">
+      <p>Failed to create recurring classes: {{ creationError }}</p>
+    </div>
+    <div *ngIf="!creationError">
+      <p *ngIf="createdCount > 0">
+        Successfully created {{ createdCount }} class{{ createdCount === 1 ? '' : 'es' }}.
+      </p>
+      <p *ngIf="skippedCount > 0">
+        Skipped {{ skippedCount }} conflicting or failed slot{{ skippedCount === 1 ? '' : 's' }}.
+      </p>
+      <p *ngIf="createdCount === 0 && skippedCount > 0">
+        Slot not available for the selected weekdays/time. Please choose a different time or weekdays.
+      </p>
+    </div>
+  </div>
+  <div class="modal-actions">
+    <button type="button" class="approve" (click)="creationResultOpen = false">Close</button>
   </div>
 </div>

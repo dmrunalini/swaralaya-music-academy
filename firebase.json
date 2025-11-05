@@ -4,17 +4,11 @@
     "indexes": "firestore.indexes.json"
   },
   "hosting": {
-    "public": "dist/swaralaya-music-academy/browser",
+    "public": "dist\\swaralaya-music-academy",
     "ignore": [
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
-    ],
-    "rewrites": [
-      {
-        "source": "**",
-        "destination": "/index.html"
-      }
     ]
   }
 }
